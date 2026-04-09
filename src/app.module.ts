@@ -26,8 +26,10 @@ import { PrismaModule } from './shared/prisma/prisma.module';
     // Logging (Winston)
     WinstonModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        transports: [
+      useFactory: (configService: ConfigService) => {
+        const isProduction = configService.get<string>('APP_ENV') === 'production';
+        
+        const transports: winston.transport[] = [
           new winston.transports.Console({
             format: winston.format.combine(
               winston.format.timestamp(),
@@ -39,19 +41,27 @@ import { PrismaModule } from './shared/prisma/prisma.module';
               ),
             ),
           }),
-          new winston.transports.DailyRotateFile({
-            filename: 'logs/application-%DATE%.log',
-            datePattern: 'YYYY-MM-DD',
-            zippedArchive: true,
-            maxSize: '20m',
-            maxFiles: '14d',
-            format: winston.format.combine(
-              winston.format.timestamp(),
-              winston.format.json(),
-            ),
-          }),
-        ],
-      }),
+        ];
+
+        // Only log to file in non-production environments to avoid EROFS on serverless (Vercel/Render)
+        if (!isProduction) {
+          transports.push(
+            new (winston.transports as any).DailyRotateFile({
+              filename: 'logs/application-%DATE%.log',
+              datePattern: 'YYYY-MM-DD',
+              zippedArchive: true,
+              maxSize: '20m',
+              maxFiles: '14d',
+              format: winston.format.combine(
+                winston.format.timestamp(),
+                winston.format.json(),
+              ),
+            }),
+          );
+        }
+
+        return { transports };
+      },
     }),
 
     // Features
