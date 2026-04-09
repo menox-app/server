@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. Core User Model
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String?   // Nullable for OAuth-only users
+  username        String    @unique
+  displayName     String?
+  avatarUrl       String?   // URL to Cloudflare R2
+  bio             String?   @db.VarChar(160)
+  
+  // Pro Features (MENOX Branding)
+  isPro           Boolean   @default(false)
+  avatarFrameId   String?   // Reference to a frame design
+  
+  // Account Status
+  role            Role      @default(USER)
+  isVerified      Boolean   @default(false)
+  isActive        Boolean   @default(true)
+
+  // Relationships
+  accounts        Account[] // Multiple OAuth providers
+  sessions        Session[] // Refresh token management
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([email, username])
+  @@map("users")
+}
+
+// 2. OAuth Accounts (Linking Google/Apple)
+model Account {
+  id                String   @id @default(uuid())
+  userId            String
+  provider          Provider
+  providerAccountId String   // Unique ID from Google/Apple (sub)
+  accessToken       String?  @db.Text
+  idToken           String?  @db.Text
+  
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// 3. Session & Refresh Token Management
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique // Hashed Refresh Token
+  deviceInfo   String?  // e.g., "iPhone 15, iOS 17.2"
+  ipAddress    String?
+  expiresAt    DateTime
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// Enums
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum Provider {
+  GOOGLE
+  APPLE
+  CREDENTIALS
+}
