@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import {
   FastifyAdapter,
