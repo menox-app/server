@@ -16,51 +16,37 @@ import compression from '@fastify/compress';
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false }), // We use Winston for logging
+    new FastifyAdapter({ logger: false }),
   );
 
   const configService = app.get(ConfigService);
   const logger = app.get(WINSTON_MODULE_NEST_PROVIDER);
-
-  // Set global logger to Winston
   app.useLogger(logger);
 
-  // Security & Optimization (Fastify versions)
   await app.register(helmet);
   await app.register(compression);
 
-  // CORS
   app.enableCors();
-
-  // Versioning
   app.enableVersioning({
     type: VersioningType.URI,
     defaultVersion: '1',
   });
 
-  // Global prefixes
   app.setGlobalPrefix('api');
 
-  // Global Pipes
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
     }),
   );
 
-  // Global Interceptors
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // Global Filters
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapter));
 
-  // Swagger (Fastify compatible)
   if (configService.get('app.env') !== 'production') {
     const appName = configService.get<string>('app.name') || 'NestJS API';
     const config = new DocumentBuilder()
@@ -73,15 +59,26 @@ async function bootstrap() {
     SwaggerModule.setup('api-docs', app, document);
   }
 
-  // Graceful Shutdown
   app.enableShutdownHooks();
 
-  const port = configService.get<number>('app.port') || 3000;
-  await app.listen(port, '0.0.0.0');
-
-  logger.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
-  if (configService.get('app.env') !== 'production') {
-    logger.log(`📄 Swagger documentation: http://localhost:${port}/api-docs`);
-  }
+  await app.init();
+  return app;
 }
-bootstrap();
+
+// Logic for local development
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  bootstrap().then(async (app) => {
+    const configService = app.get(ConfigService);
+    const port = configService.get<number>('app.port') || 3000;
+    await app.listen(port, '0.0.0.0');
+    console.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
+  });
+}
+
+// Export for Vercel
+export default async (req: any, res: any) => {
+  const app = await bootstrap();
+  const instance = app.getHttpAdapter().getInstance();
+  await instance.ready();
+  instance.server.emit('request', req, res);
+};
