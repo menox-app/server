@@ -6,7 +6,8 @@ export const validationSchema = Joi.object({
     .valid('development', 'production', 'test', 'provision')
     .default('development'),
   APP_NAME: Joi.string().default('nestjs-standard-2026'),
-  APP_PORT: Joi.number().port().default(3000),
+  APP_PORT: Joi.number().port().allow('', null).optional(),
+  PORT: Joi.number().port().allow('', null).optional(),
 
   // Database (Prisma)
   DATABASE_URL: Joi.string().uri().required(),
