@@ -5,7 +5,7 @@ export const validationSchema = Joi.object({
   APP_ENV: Joi.string()
     .valid('development', 'production', 'test', 'provision')
     .default('development'),
-  APP_NAME: Joi.string().required(),
+  APP_NAME: Joi.string().default('nestjs-standard-2026'),
   APP_PORT: Joi.number().port().default(3000),
 
   // Database (Prisma)
@@ -13,5 +13,12 @@ export const validationSchema = Joi.object({
 
   // Security
   JWT_SECRET: Joi.string().required(),
-  JWT_EXPIRES_IN: Joi.number().default(3600),
+  JWT_EXPIRES_IN: Joi.string().default('1h'),
+  JWT_REFRESH_SECRET: Joi.string().required(),
+  JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
+
+  // Google OAuth (Optional)
+  GOOGLE_CLIENT_ID: Joi.string().allow(''),
+  GOOGLE_CLIENT_SECRET: Joi.string().allow(''),
+  GOOGLE_CALLBACK_URL: Joi.string().uri().allow(''),
 });

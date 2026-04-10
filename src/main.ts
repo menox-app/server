@@ -66,20 +66,9 @@ async function bootstrap() {
   return app;
 }
 
-// Logic for local development
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-  bootstrap().then(async (app) => {
-    const configService = app.get(ConfigService);
-    const port = configService.get<number>('app.port') || 3000;
-    await app.listen(port, '0.0.0.0');
-    console.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
-  });
-}
-
-// Export for Vercel
-export default async (req: any, res: any) => {
-  const app = await bootstrap();
-  const instance = app.getHttpAdapter().getInstance();
-  await instance.ready();
-  instance.server.emit('request', req, res);
-};
+bootstrap().then(async (app) => {
+  const configService = app.get(ConfigService);
+  const port = configService.get<number>('app.port') || 3000;
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
+});
