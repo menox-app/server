@@ -58,6 +58,44 @@ export class UsersService {
     });
   }
 
+  async updateProfile(id: string, data: { displayName?: string; bio?: string }): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async updateAvatar(id: string, data: { avatarUrl: string; avatarPublicId?: string }): Promise<User> {
+    const { avatarUrl, avatarPublicId } = data;
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Update User avatarUrl
+      const user = await tx.user.update({
+        where: { id },
+        data: { avatarUrl },
+      });
+
+      // 2. Manage Avatar History
+      // Mark old current avatar as false
+      await (tx as any).userAvatar.updateMany({
+        where: { userId: id, isCurrent: true },
+        data: { isCurrent: false },
+      });
+
+      // Add new current avatar
+      await (tx as any).userAvatar.create({
+        data: {
+          userId: id,
+          url: avatarUrl,
+          publicId: avatarPublicId || null,
+          isCurrent: true,
+        },
+      });
+
+      return user;
+    });
+  }
+
   async findByUsername(username: string): Promise<User | null> {
     return this.prisma.user.findUnique({
       where: { username } as any,
