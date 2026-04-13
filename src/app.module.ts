@@ -7,6 +7,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { configs, validationSchema } from './configs';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { HttpLoggerMiddleware } from './common/middleware/http-logger.middleware';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PrismaModule } from './shared/prisma/prisma.module';
@@ -73,6 +74,8 @@ import { PrismaModule } from './shared/prisma/prisma.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    consumer
+      .apply(CorrelationIdMiddleware, HttpLoggerMiddleware)
+      .forRoutes('*');
   }
 }

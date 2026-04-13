@@ -26,23 +26,24 @@ export class AuthService {
   }
 
   async generateTokens(userId: string, email: string, deviceInfo?: string, ipAddress?: string) {
-    const accessSecret = this.configService.get<string>('JWT_SECRET') || 'secret';
-    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-secret';
-    const expiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
+    const accessSecret = this.configService.getOrThrow<string>('app.jwtSecret');
+    const refreshSecret = this.configService.getOrThrow<string>('app.jwtRefreshSecret');
+    const accessExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '1h';
+    const refreshExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
 
     const [access_token, refresh_token] = await Promise.all([
       this.jwtService.signAsync(
         { sub: userId, email },
         {
           secret: accessSecret,
-          expiresIn: this.configService.get<string>('JWT_EXPIRES_IN') || '1h',
+          expiresIn: accessExpiresIn,
         } as any,
       ),
       this.jwtService.signAsync(
         { sub: userId, email },
         {
           secret: refreshSecret,
-          expiresIn: expiresIn,
+          expiresIn: refreshExpiresIn,
         } as any,
       ),
     ]);
@@ -51,7 +52,7 @@ export class AuthService {
     const hashedToken = await bcrypt.hash(refresh_token, 10);
     const expiresAt = new Date();
     // Parse duration (e.g., '7d') - simple implementation
-    const days = parseInt(expiresIn) || 7;
+    const days = parseInt(refreshExpiresIn) || 7;
     expiresAt.setDate(expiresAt.getDate() + days);
 
     // Session management logic: Upsert based on userId and deviceInfo
@@ -103,6 +104,12 @@ export class AuthService {
     if (existingUser) {
       throw new ConflictException('Email already exists');
     }
+
+    const existingUsername = await this.usersService.findByUsername(createUserDto.username);
+    if (existingUsername) {
+      throw new ConflictException('Username already exists');
+    }
+
     const user = (await this.usersService.create(createUserDto)) as any;
     return this.generateTokens(user.id, user.email, deviceInfo, ipAddress);
   }
@@ -110,7 +117,7 @@ export class AuthService {
   async refreshTokens(refreshToken: string, deviceInfo?: string, ipAddress?: string) {
     try {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-secret',
+        secret: this.configService.getOrThrow<string>('app.jwtRefreshSecret'),
       });
       
       const sessions = await (this.prisma as any).session.findMany({
@@ -145,7 +152,7 @@ export class AuthService {
   async logout(refreshToken: string) {
     try {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET') || 'refresh-secret',
+        secret: this.configService.getOrThrow<string>('app.jwtRefreshSecret'),
       });
 
       const sessions = await (this.prisma as any).session.findMany({

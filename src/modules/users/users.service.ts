@@ -31,13 +31,30 @@ export class UsersService {
   async create(createUserDto: CreateUserDto): Promise<User> {
     const { password, ...userData } = createUserDto;
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
-    
-    return this.prisma.user.create({
-      data: {
-        ...userData,
-        passwordHash: hashedPassword,
-        // Initially no social accounts for local registration
-      } as any,
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Create User
+      const user = await tx.user.create({
+        data: {
+          ...userData,
+          passwordHash: hashedPassword,
+          avatarUrl: userData.avatarUrl || null,
+        } as any,
+      });
+
+      // 2. Create Initial Avatar entry if URL is provided
+      if (userData.avatarUrl) {
+        await (tx as any).userAvatar.create({
+          data: {
+            userId: user.id,
+            url: userData.avatarUrl,
+            publicId: (userData as any).avatarPublicId || null,
+            isCurrent: true,
+          },
+        });
+      }
+
+      return user;
     });
   }
 

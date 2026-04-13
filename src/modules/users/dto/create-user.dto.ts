@@ -21,4 +21,14 @@ export class CreateUserDto {
   @IsString()
   @MinLength(6)
   password: string;
+
+  @ApiProperty({ example: 'https://res.cloudinary.com/...' })
+  @IsString()
+  @IsOptional()
+  avatarUrl?: string;
+
+  @ApiProperty({ example: 'avatars/abc123' })
+  @IsString()
+  @IsOptional()
+  avatarPublicId?: string;
 }

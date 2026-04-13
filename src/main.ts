@@ -13,6 +13,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import helmet from '@fastify/helmet';
 import compression from '@fastify/compress';
+import multipart from '@fastify/multipart';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -26,6 +27,7 @@ async function bootstrap() {
 
   await app.register(helmet);
   await app.register(compression);
+  await app.register(multipart);
 
   app.enableCors();
   app.enableVersioning({

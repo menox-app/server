@@ -32,12 +32,28 @@ model User {
   // Relationships
   accounts        Account[] // Multiple OAuth providers
   sessions        Session[] // Refresh token management
+  avatars         UserAvatar[] // History of avatars
   
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@index([email, username])
   @@map("users")
+}
+
+// 1b. User Avatar History
+model UserAvatar {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  publicId  String?  // Cloudinary public_id
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_avatars")
 }
 
 // 2. OAuth Accounts (Linking Google/Apple)
