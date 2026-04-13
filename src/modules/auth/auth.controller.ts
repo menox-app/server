@@ -6,6 +6,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { CloudinaryService } from '../../shared/cloudinary/cloudinary.service';
+import { AVATAR_DEFAULT } from '../../constants/avatar.default';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -14,6 +15,12 @@ export class AuthController {
     private authService: AuthService,
     private cloudinaryService: CloudinaryService,
   ) {}
+
+  @Get('default-avatars')
+  @ApiOperation({ summary: 'Get list of default avatar URLs' })
+  getDefaultAvatars() {
+    return AVATAR_DEFAULT;
+  }
 
   @Post('register')
   @ApiOperation({ summary: 'Register a new user' })
