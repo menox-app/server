@@ -1,31 +1,28 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { CloudinaryModule } from '../../shared/cloudinary/cloudinary.module';
 
+@Global()
 @Module({
   imports: [
     UsersModule,
-    PassportModule,
-    CloudinaryModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: async (configService: ConfigService) => ({
+        global: true,
         secret: configService.getOrThrow<string>('app.jwtSecret'),
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '1h',
+          expiresIn: '1h', // Hardcoded cố định theo yêu cầu của bạn
         },
-      }) as any,
-      inject: [ConfigService],
+      }),
     }),
   ],
-  providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
-  exports: [AuthService],
+  providers: [AuthService],
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

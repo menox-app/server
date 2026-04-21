@@ -12,12 +12,12 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { User } from '@prisma/client';
-import { UserEntity } from './entities/user.entity';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UpdateAvatarDto } from './dto/update-avatar.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { User } from './interfaces/user.model';
+import { UserEntity } from './interfaces/user.entity';
+import { CreateUserDto } from './dtos/create-user.dto';
+import { UpdateProfileDto } from './dtos/update-profile.dto';
+import { UpdateAvatarDto } from './dtos/update-avatar.dto';
+import { AuthGuard } from '../../common/guards/auth.guard';
 import { CloudinaryService } from '../../shared/cloudinary/cloudinary.service';
 
 @ApiTags('users')
@@ -29,7 +29,7 @@ export class UsersController {
   ) {}
 
   @Patch('profile')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update current user profile info' })
   @ApiResponse({ status: 200, type: UserEntity })
@@ -38,7 +38,7 @@ export class UsersController {
   }
 
   @Post('avatar')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(AuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update current user avatar' })
   @ApiConsumes('multipart/form-data', 'application/json')
@@ -46,7 +46,6 @@ export class UsersController {
   async updateAvatar(@Request() req, @Body() updateAvatarDto: UpdateAvatarDto) {
     const userId = req.user.id;
 
-    // 1. Handle Multipart Upload
     if (req.isMultipart && req.isMultipart()) {
       const parts = await req.file();
       if (parts) {
@@ -80,21 +79,21 @@ export class UsersController {
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, type: [UserEntity] })
   findAll(): Promise<User[]> {
-    return this.usersService.findAll();
+    return this.usersService.findAllUsers();
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get user by id' })
   @ApiResponse({ status: 200, type: UserEntity })
   findOne(@Param('id') id: string): Promise<User> {
-    return this.usersService.findOne(id);
+    return this.usersService.findOneUser(id);
   }
 
   @Post()
   @ApiOperation({ summary: 'Create user' })
   @ApiResponse({ status: 201, type: UserEntity })
   create(@Body() createUserDto: CreateUserDto): Promise<User> {
-    return this.usersService.create(createUserDto);
+    return this.usersService.createUser(createUserDto);
   }
 
   @Delete(':id')

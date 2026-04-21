@@ -9,8 +9,14 @@ export const validationSchema = Joi.object({
   APP_PORT: Joi.number().port().allow('', null).optional(),
   PORT: Joi.number().port().allow('', null).optional(),
 
-  // Database (Prisma)
-  DATABASE_URL: Joi.string().uri().required(),
+  // Database
+  DB_CLIENT: Joi.string().default('pg'),
+  DB_HOST: Joi.string().required(),
+  DB_PORT: Joi.number().port().default(5432),
+  DB_USER: Joi.string().required(),
+  DB_PASSWORD: Joi.string().required(),
+  DB_NAME: Joi.string().required(),
+  DB_SSL: Joi.boolean().default(false),
 
   // Security
   JWT_SECRET: Joi.string().required(),

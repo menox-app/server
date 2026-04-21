@@ -1,112 +1,127 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../shared/prisma/prisma.service';
-import { User } from '@prisma/client';
-import { CreateUserDto } from './dto/create-user.dto';
+import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Knex } from 'knex';
+import { KNEX_CONNECTION } from '../../infrastructure/knex/knex.module';
+import { BaseRepository } from '../../infrastructure/repositories/base.repository';
+import { User } from './interfaces/user.model';
+import { CreateUserDto } from './dtos/create-user.dto';
 import * as bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 
 @Injectable()
-export class UsersService {
-  constructor(private prisma: PrismaService) { }
-
-  findAll(): Promise<User[]> {
-    return this.prisma.user.findMany();
+export class UsersService extends BaseRepository {
+  constructor(@Inject(KNEX_CONNECTION) knex: Knex) {
+    super(knex);
   }
 
-  async findOne(id: string): Promise<User> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-    });
+  async findAllUsers(): Promise<User[]> {
+    const rows = await this.knex('users').select('*');
+    return rows.map((row) => this.mapRow(row));
+  }
+
+  async findOneUser(id: string): Promise<User> {
+    const user = await this.findById('users', id);
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    return user;
+    return this.mapRow(user);
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { email },
-    });
+    const row = await this.findOneByCondition('users', { email });
+    return row ? this.mapRow(row) : null;
   }
 
-  async create(createUserDto: CreateUserDto): Promise<User> {
-    const { password, ...userData } = createUserDto;
+  async findByUsername(username: string): Promise<User | null> {
+    const row = await this.findOneByCondition('users', { username });
+    return row ? this.mapRow(row) : null;
+  }
+
+  async createUser(createUserDto: CreateUserDto): Promise<User> {
+    const { password, avatarPublicId, ...userData } = createUserDto;
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Create User
-      const user = await tx.user.create({
-        data: {
-          ...userData,
+    return this.transaction(async (trx) => {
+      const [user] = await trx('users')
+        .insert({
+          id: randomUUID(),
+          email: userData.email,
+          username: userData.username,
+          displayName: userData.displayName || null,
           passwordHash: hashedPassword,
           avatarUrl: userData.avatarUrl || null,
-        } as any,
-      });
+          updatedAt: new Date(), // Bổ sung để thỏa mãn ràng buộc NOT NULL của DB
+        })
+        .returning('*');
 
-      // 2. Create Initial Avatar entry if URL is provided
       if (userData.avatarUrl) {
-        await (tx as any).userAvatar.create({
-          data: {
-            userId: user.id,
-            url: userData.avatarUrl,
-            publicId: (userData as any).avatarPublicId || null,
-            isCurrent: true,
-          },
+        await trx('user_avatars').insert({
+          id: randomUUID(),
+          userId: user.id,
+          url: userData.avatarUrl,
+          publicId: avatarPublicId || null,
+          isCurrent: true,
+          // Bảng user_avatars cũng có createdAt NOT NULL mặc định là CURRENT_TIMESTAMP
         });
       }
 
-      return user;
+      return this.mapRow(user);
     });
   }
 
   async updateProfile(id: string, data: { displayName?: string; bio?: string }): Promise<User> {
-    return this.prisma.user.update({
-      where: { id },
-      data,
-    });
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (data.displayName !== undefined) updateData.displayName = data.displayName;
+    if (data.bio !== undefined) updateData.bio = data.bio;
+
+    const user = await this.update('users', id, updateData);
+    return this.mapRow(user);
   }
 
   async updateAvatar(id: string, data: { avatarUrl: string; avatarPublicId?: string }): Promise<User> {
     const { avatarUrl, avatarPublicId } = data;
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Update User avatarUrl
-      const user = await tx.user.update({
-        where: { id },
-        data: { avatarUrl },
+    return this.transaction(async (trx) => {
+      const [user] = await trx('users')
+        .where({ id })
+        .update({ avatarUrl, updatedAt: new Date() })
+        .returning('*');
+
+      await trx('user_avatars')
+        .where({ userId: id, isCurrent: true })
+        .update({ isCurrent: false });
+
+      await trx('user_avatars').insert({
+        id: randomUUID(),
+        userId: id,
+        url: avatarUrl,
+        publicId: avatarPublicId || null,
+        isCurrent: true,
       });
 
-      // 2. Manage Avatar History
-      // Mark old current avatar as false
-      await (tx as any).userAvatar.updateMany({
-        where: { userId: id, isCurrent: true },
-        data: { isCurrent: false },
-      });
-
-      // Add new current avatar
-      await (tx as any).userAvatar.create({
-        data: {
-          userId: id,
-          url: avatarUrl,
-          publicId: avatarPublicId || null,
-          isCurrent: true,
-        },
-      });
-
-      return user;
-    });
-  }
-
-  async findByUsername(username: string): Promise<User | null> {
-    return this.prisma.user.findUnique({
-      where: { username } as any,
+      return this.mapRow(user);
     });
   }
 
   async remove(id: string): Promise<void> {
-    await this.prisma.user.delete({
-      where: { id },
-    });
+    await this.delete('users', id);
   }
 
-  // Session management is now in AuthService, we remove updateRefreshToken from here
+  private mapRow(row: any): User {
+    return {
+      id: row.id,
+      email: row.email,
+      passwordHash: row.passwordHash,
+      username: row.username,
+      displayName: row.displayName,
+      avatarUrl: row.avatarUrl,
+      bio: row.bio,
+      isPro: row.isPro,
+      avatarFrameId: row.avatarFrameId,
+      role: row.role,
+      isVerified: row.isVerified,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
 }

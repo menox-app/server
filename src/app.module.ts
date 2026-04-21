@@ -10,7 +10,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 import { HttpLoggerMiddleware } from './common/middleware/http-logger.middleware';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { PrismaModule } from './shared/prisma/prisma.module';
+import { KnexModule } from './infrastructure/knex/knex.module';
 
 @Module({
   imports: [
@@ -22,7 +22,7 @@ import { PrismaModule } from './shared/prisma/prisma.module';
     }),
 
     // Infrastructure
-    PrismaModule,
+    KnexModule,
 
     // Logging (Winston)
     WinstonModule.forRootAsync({
@@ -44,7 +44,6 @@ import { PrismaModule } from './shared/prisma/prisma.module';
           }),
         ];
 
-        // Only log to file in non-production environments to avoid EROFS on serverless (Vercel/Render)
         if (!isProduction) {
           transports.push(
             new (winston.transports as any).DailyRotateFile({

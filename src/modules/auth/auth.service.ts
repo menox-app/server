@@ -1,102 +1,108 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Inject, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UsersService } from '../users/users.service';
-import { PrismaService } from '../../shared/prisma/prisma.service';
-import * as bcrypt from 'bcryptjs';
-import { CreateUserDto } from '../users/dto/create-user.dto';
-import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
+import { Knex } from 'knex';
+import { KNEX_CONNECTION } from '../../infrastructure/knex/knex.module';
+import { UsersService } from '../users/users.service';
+import { CreateUserDto } from '../users/dtos/create-user.dto';
+import { LoginDto } from './dtos/login.dto';
+import { LoginMethod } from './enums/auth.enum';
+import * as bcrypt from 'bcryptjs';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-    private configService: ConfigService,
-    private prisma: PrismaService,
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    @Inject(KNEX_CONNECTION) private readonly knex: Knex,
   ) {}
 
-  async validateUser(email: string, pass: string): Promise<any> {
-    const user = (await this.usersService.findByEmail(email)) as any;
-    if (user && user.passwordHash && (await bcrypt.compare(pass, user.passwordHash))) {
-      const { passwordHash, ...result } = user;
-      return result;
+  /**
+   * Main login point supporting multiple methods
+   */
+  async login(loginDto: LoginDto, deviceInfo?: string, ipAddress?: string) {
+    const { email, password, method } = loginDto;
+
+    switch (method) {
+      case LoginMethod.Password:
+        if (!password) {
+          throw new BadRequestException('Password is required for this login method');
+        }
+        return this.loginWithPassword(email, password, deviceInfo, ipAddress);
+      
+      case LoginMethod.Code:
+        throw new BadRequestException('Login with verification code is not implemented yet');
+      
+      case LoginMethod.Google:
+      case LoginMethod.Apple:
+      case LoginMethod.Social:
+        throw new BadRequestException('Social login is not implemented yet');
+
+      default:
+        throw new BadRequestException('Unsupported login method');
     }
-    return null;
+  }
+
+  private async loginWithPassword(email: string, pass: string, deviceInfo?: string, ipAddress?: string) {
+    const user = (await this.usersService.findByEmail(email)) as any;
+    
+    if (!user || !user.passwordHash || !(await bcrypt.compare(pass, user.passwordHash))) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    return this.generateTokens(user.id, user.email, deviceInfo, ipAddress);
   }
 
   async generateTokens(userId: string, email: string, deviceInfo?: string, ipAddress?: string) {
+    const payload = { id: userId, sub: userId, email };
+    
     const accessSecret = this.configService.getOrThrow<string>('app.jwtSecret');
     const refreshSecret = this.configService.getOrThrow<string>('app.jwtRefreshSecret');
-    const accessExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN') || '1h';
-    const refreshExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') || '7d';
+    
+    // Hardcoded expiration times as requested
+    const accessExpiresIn = '1h';
+    const refreshExpiresIn = '7d';
 
     const [access_token, refresh_token] = await Promise.all([
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          secret: accessSecret,
-          expiresIn: accessExpiresIn,
-        } as any,
-      ),
-      this.jwtService.signAsync(
-        { sub: userId, email },
-        {
-          secret: refreshSecret,
-          expiresIn: refreshExpiresIn,
-        } as any,
-      ),
+      this.jwtService.signAsync(payload, { secret: accessSecret, expiresIn: accessExpiresIn }),
+      this.jwtService.signAsync(payload, { secret: refreshSecret, expiresIn: refreshExpiresIn }),
     ]);
 
-    // Create session
     const hashedToken = await bcrypt.hash(refresh_token, 10);
     const expiresAt = new Date();
-    // Parse duration (e.g., '7d') - simple implementation
-    const days = parseInt(refreshExpiresIn) || 7;
-    expiresAt.setDate(expiresAt.getDate() + days);
+    // For sessions table, we count 7 days
+    expiresAt.setDate(expiresAt.getDate() + 7);
 
-    // Session management logic: Upsert based on userId and deviceInfo
-    // This prevents duplicate sessions if the user logs in multiple times from the same browser
-    const existingSession = await (this.prisma as any).session.findFirst({
-      where: {
-        userId,
-        deviceInfo,
-      },
-    });
+    // Save/Update session for multi-device tracking
+    await this.upsertSession(userId, hashedToken, deviceInfo, ipAddress, expiresAt);
 
-    if (existingSession) {
-      await (this.prisma as any).session.update({
-        where: { id: existingSession.id },
-        data: {
-          token: hashedToken,
-          ipAddress,
-          expiresAt,
-        },
-      });
-    } else {
-      await (this.prisma as any).session.create({
-        data: {
-          userId,
-          token: hashedToken,
-          deviceInfo,
-          ipAddress,
-          expiresAt,
-        },
-      });
-    }
-
-    return {
-      access_token,
-      refresh_token,
-    };
+    return { access_token, refresh_token };
   }
 
-  async login(loginDto: LoginDto, deviceInfo?: string, ipAddress?: string) {
-    const user = await this.validateUser(loginDto.email, loginDto.password);
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+  private async upsertSession(userId: string, token: string, deviceInfo?: string, ipAddress?: string, expiresAt?: Date) {
+    const info = deviceInfo || 'unknown';
+    const ip = ipAddress || '0.0.0.0';
+    
+    const existingSession = await this.knex('sessions')
+      .where({ userId: userId, deviceInfo: info })
+      .first();
+
+    if (existingSession) {
+      await this.knex('sessions')
+        .where({ id: existingSession.id })
+        .update({ token, ipAddress: ip, expiresAt: expiresAt || new Date() });
+    } else {
+      await this.knex('sessions').insert({
+        id: randomUUID(),
+        userId: userId,
+        token,
+        deviceInfo: info,
+        ipAddress: ip,
+        expiresAt: expiresAt || new Date(),
+      });
     }
-    return this.generateTokens(user.id, user.email, deviceInfo, ipAddress);
   }
 
   async register(createUserDto: CreateUserDto, deviceInfo?: string, ipAddress?: string) {
@@ -110,7 +116,7 @@ export class AuthService {
       throw new ConflictException('Username already exists');
     }
 
-    const user = (await this.usersService.create(createUserDto)) as any;
+    const user = (await this.usersService.createUser(createUserDto)) as any;
     return this.generateTokens(user.id, user.email, deviceInfo, ipAddress);
   }
 
@@ -119,10 +125,8 @@ export class AuthService {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.configService.getOrThrow<string>('app.jwtRefreshSecret'),
       });
-      
-      const sessions = await (this.prisma as any).session.findMany({
-        where: { userId: payload.sub },
-      });
+
+      const sessions = await this.knex('sessions').where({ userId: payload.id });
 
       let validSession: any = null;
       for (const session of sessions) {
@@ -132,17 +136,16 @@ export class AuthService {
         }
       }
 
-      if (!validSession || validSession.expiresAt < new Date()) {
+      if (!validSession || new Date(validSession.expiresAt) < new Date()) {
         if (validSession) {
-          await (this.prisma as any).session.delete({ where: { id: validSession.id } });
+          await this.knex('sessions').where({ id: validSession.id }).delete();
         }
         throw new UnauthorizedException('Access Denied');
       }
 
-      // Rotate session: Delete old one, create new one
-      await (this.prisma as any).session.delete({ where: { id: validSession.id } });
-      const user = (await this.usersService.findOne(payload.sub)) as any;
-      
+      await this.knex('sessions').where({ id: validSession.id }).delete();
+      const user = (await this.usersService.findOneUser(payload.id)) as any;
+
       return this.generateTokens(user.id, user.email, deviceInfo, ipAddress);
     } catch (e) {
       throw new UnauthorizedException('Invalid refresh token');
@@ -155,18 +158,16 @@ export class AuthService {
         secret: this.configService.getOrThrow<string>('app.jwtRefreshSecret'),
       });
 
-      const sessions = await (this.prisma as any).session.findMany({
-        where: { userId: payload.sub },
-      });
+      const sessions = await this.knex('sessions').where({ userId: payload.id });
 
       for (const session of sessions) {
         if (await bcrypt.compare(refreshToken, session.token)) {
-          await (this.prisma as any).session.delete({ where: { id: session.id } });
+          await this.knex('sessions').where({ id: session.id }).delete();
           break;
         }
       }
     } catch (e) {
-      // Token might be expired, just do nothing or log
+      // Ignore errors on logout
     }
   }
 }

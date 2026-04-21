@@ -35,7 +35,9 @@ async function bootstrap() {
     defaultVersion: '1',
   });
 
-  app.setGlobalPrefix('api');
+  // Sử dụng API_PREFIX từ config (.env)
+  const apiPrefix = configService.get<string>('API_PREFIX') || 'api';
+  app.setGlobalPrefix(apiPrefix);
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -50,8 +52,10 @@ async function bootstrap() {
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapter));
 
-  if (configService.get('app.env') !== 'production') {
-    const appName = configService.get<string>('app.name') || 'NestJS API';
+  // Kiểm tra môi trường bằng NODE_ENV thay vì APP_ENV
+  const nodeEnv = configService.get<string>('NODE_ENV') || 'development';
+  if (nodeEnv !== 'production') {
+    const appName = configService.get<string>('APP_NAME') || 'NestJS API';
     const config = new DocumentBuilder()
       .setTitle(appName)
       .setDescription('The API description for ' + appName)
@@ -70,7 +74,9 @@ async function bootstrap() {
 
 bootstrap().then(async (app) => {
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('app.port') || 3000;
+  const port = configService.get<number>('APP_PORT') || 3000;
+  const apiPrefix = configService.get<string>('API_PREFIX') || 'api';
   await app.listen(port, '0.0.0.0');
-  console.log(`🚀 Application is running on: http://localhost:${port}/api/v1`);
+  console.log(`🚀 Application is running on: http://localhost:${port}/${apiPrefix}/v1`);
+  console.log(`📑 Swagger UI available at: http://localhost:${port}/api-docs`);
 });

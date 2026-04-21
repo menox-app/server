@@ -5,8 +5,8 @@ import { CloudinaryModule } from '../../shared/cloudinary/cloudinary.module';
 
 @Module({
   imports: [CloudinaryModule],
-  providers: [UsersService],
   controllers: [UsersController],
+  providers: [UsersService],
   exports: [UsersService],
 })
 export class UsersModule {}

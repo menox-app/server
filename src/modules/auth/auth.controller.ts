@@ -1,91 +1,67 @@
-import { Controller, Post, Body, Get, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Get,
+  Request,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { CreateUserDto } from '../users/dto/create-user.dto';
-import { LoginDto } from './dto/login.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { CloudinaryService } from '../../shared/cloudinary/cloudinary.service';
-import { AVATAR_DEFAULT } from '../../constants/avatar.default';
+import { LoginDto } from './dtos/login.dto';
+import { CreateUserDto } from '../users/dtos/create-user.dto';
+import { AuthGuard } from '../../common/guards/auth.guard';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
+@UseGuards(AuthGuard)
 export class AuthController {
-  constructor(
-    private authService: AuthService,
-    private cloudinaryService: CloudinaryService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
-  @Get('default-avatars')
-  @ApiOperation({ summary: 'Get list of default avatar URLs' })
-  getDefaultAvatars() {
-    return AVATAR_DEFAULT;
-  }
-
-  @Post('register')
-  @ApiOperation({ summary: 'Register a new user' })
-  @ApiConsumes('multipart/form-data', 'application/json')
-  async register(@Request() req, @Body() createUserDto: CreateUserDto) {
-    // 1. Handle Multipart Upload (if selected custom file)
-    if (req.isMultipart && req.isMultipart()) {
-      const parts = await req.file();
-      if (parts) {
-        // Overlay fields from multipart since @Body() might be empty/partial in multipart requests
-        this.extractMultipartFields(parts.fields, createUserDto);
-
-        const buffer = await parts.toBuffer();
-        const uploadResult = await this.cloudinaryService.uploadImage(buffer, 'avatars');
-        
-        createUserDto.avatarUrl = uploadResult.secure_url;
-        createUserDto.avatarPublicId = (uploadResult as any).public_id;
-      }
-    }
-
-    // 2. Execute registration
-    const deviceInfo = req.headers['x-device-id'] || req.headers['user-agent'] || 'unknown';
-    const ipAddress = req.ip || '0.0.0.0';
-    
-    return this.authService.register(createUserDto, deviceInfo, ipAddress);
-  }
-
-  private extractMultipartFields(fields: any, dto: CreateUserDto) {
-    if (!fields) return;
-    if (fields.username) dto.username = fields.username.value;
-    if (fields.email) dto.email = fields.email.value;
-    if (fields.password) dto.password = fields.password.value;
-    if (fields.displayName) dto.displayName = fields.displayName.value;
-    if (fields.avatarUrl) dto.avatarUrl = fields.avatarUrl.value;
-    if (fields.avatarPublicId) dto.avatarPublicId = fields.avatarPublicId.value;
-  }
-
+  @Public()
   @Post('login')
-  @ApiOperation({ summary: 'Login user and return JWT' })
-  login(@Request() req, @Body() loginDto: LoginDto) {
-    const deviceInfo = req.headers['x-device-id'] || req.headers['user-agent'] || 'unknown';
-    const ipAddress = req.ip || '0.0.0.0';
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Login to the system' })
+  async login(@Body() loginDto: LoginDto, @Request() req: any) {
+    const deviceInfo = req.headers['user-agent'];
+    const ipAddress = req.ip;
     return this.authService.login(loginDto, deviceInfo, ipAddress);
   }
 
-  @Post('refresh')
-  @ApiOperation({ summary: 'Refresh tokens' })
-  refresh(@Request() req, @Body() refreshTokenDto: RefreshTokenDto) {
-    const deviceInfo = req.headers['x-device-id'] || req.headers['user-agent'] || 'unknown';
-    const ipAddress = req.ip || '0.0.0.0';
-    return this.authService.refreshTokens(refreshTokenDto.refreshToken, deviceInfo, ipAddress);
+  @Public()
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new account' })
+  async register(@Body() createUserDto: CreateUserDto, @Request() req: any) {
+    const deviceInfo = req.headers['user-agent'];
+    const ipAddress = req.ip;
+    return this.authService.register(createUserDto, deviceInfo, ipAddress);
+  }
+
+  @Post('refresh-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get new access token from refresh token' })
+  async refreshToken(@Body('refresh_token') token: string, @Request() req: any) {
+    const deviceInfo = req.headers['user-agent'];
+    const ipAddress = req.ip;
+    return this.authService.refreshTokens(token, deviceInfo, ipAddress);
   }
 
   @Post('logout')
-  @ApiOperation({ summary: 'Logout user' })
-  logout(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.logout(refreshTokenDto.refreshToken);
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout from the system' })
+  async logout(@Body('refresh_token') token: string) {
+    return this.authService.logout(token);
   }
 
-
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
   @Get('me')
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current user profile' })
-  getProfile(@Request() req) {
-    return req.user;
+  async getMe(@Request() req: any) {
+    const { passwordHash, ...userWithoutPassword } = req.user;
+    return userWithoutPassword;
   }
 }
