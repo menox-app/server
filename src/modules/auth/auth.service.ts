@@ -6,7 +6,7 @@ import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
 import { UsersService } from '@/modules/users/users.service';
 import { CreateUserDto } from '@/modules/users/dtos/create-user.dto';
 import { LoginDto } from './dtos/login.dto';
-import { LoginMethod } from './enums/auth.enum';
+import { AuthProvider } from './enums/auth.enum';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
 
@@ -23,21 +23,21 @@ export class AuthService {
    * Main login point supporting multiple methods
    */
   async login(loginDto: LoginDto, deviceInfo?: string, ipAddress?: string) {
-    const { email, password, method } = loginDto;
+    const { email, password, provider } = loginDto;
 
-    switch (method) {
-      case LoginMethod.Password:
+    switch (provider) {
+      case AuthProvider.Password:
         if (!password) {
           throw new BadRequestException('Password is required for this login method');
         }
         return this.loginWithPassword(email, password, deviceInfo, ipAddress);
       
-      case LoginMethod.Code:
+      case AuthProvider.Code:
         throw new BadRequestException('Login with verification code is not implemented yet');
       
-      case LoginMethod.Google:
-      case LoginMethod.Apple:
-      case LoginMethod.Social:
+      case AuthProvider.Google:
+      case AuthProvider.Apple:
+      case AuthProvider.Social:
         throw new BadRequestException('Social login is not implemented yet');
 
       default:

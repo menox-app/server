@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsNotEmpty, IsOptional, IsString, IsEnum } from 'class-validator';
-import { LoginMethod } from '@/modules/auth/enums/auth.enum';
+import { AuthProvider } from '@/modules/auth/enums/auth.enum';
 
 export class LoginDto {
   @ApiProperty({ example: 'memox@example.com' })
@@ -14,11 +14,11 @@ export class LoginDto {
   password?: string;
 
   @ApiProperty({ 
-    enum: LoginMethod, 
-    default: LoginMethod.Password,
-    description: 'Phương thức đăng nhập' 
+    enum: AuthProvider, 
+    default: AuthProvider.Password,
+    description: 'AuthProvider' 
   })
-  @IsEnum(LoginMethod)
+  @IsEnum(AuthProvider)
   @IsOptional()
-  method: LoginMethod = LoginMethod.Password;
+  provider: AuthProvider = AuthProvider.Password;
 }

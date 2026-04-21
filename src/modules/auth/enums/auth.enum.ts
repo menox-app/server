@@ -1,4 +1,4 @@
-export enum LoginMethod {
+export enum AuthProvider {
   Password = 'password',
   Code = 'code',
   Social = 'social',
