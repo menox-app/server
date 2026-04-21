@@ -1,4 +1,4 @@
-import { Provider } from '../enums/provider.enum';
+import { Provider } from '@/modules/auth/enums/provider.enum';
 
 export interface Account {
   id: string;

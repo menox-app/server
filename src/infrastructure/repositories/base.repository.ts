@@ -1,6 +1,6 @@
 import { Inject } from '@nestjs/common';
 import { Knex } from 'knex';
-import { KNEX_CONNECTION } from '../knex/knex.module';
+import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
 
 export abstract class BaseRepository {
   constructor(@Inject(KNEX_CONNECTION) protected readonly knex: Knex) {}

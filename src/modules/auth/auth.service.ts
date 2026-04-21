@@ -2,9 +2,9 @@ import { Injectable, UnauthorizedException, ConflictException, Inject, BadReques
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Knex } from 'knex';
-import { KNEX_CONNECTION } from '../../infrastructure/knex/knex.module';
-import { UsersService } from '../users/users.service';
-import { CreateUserDto } from '../users/dtos/create-user.dto';
+import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
+import { UsersService } from '@/modules/users/users.service';
+import { CreateUserDto } from '@/modules/users/dtos/create-user.dto';
 import { LoginDto } from './dtos/login.dto';
 import { LoginMethod } from './enums/auth.enum';
 import * as bcrypt from 'bcryptjs';

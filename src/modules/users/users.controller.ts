@@ -17,8 +17,8 @@ import { UserEntity } from './interfaces/user.entity';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { UpdateProfileDto } from './dtos/update-profile.dto';
 import { UpdateAvatarDto } from './dtos/update-avatar.dto';
-import { AuthGuard } from '../../common/guards/auth.guard';
-import { CloudinaryService } from '../../shared/cloudinary/cloudinary.service';
+import { AuthGuard } from '@/common/guards/auth.guard';
+import { CloudinaryService } from '@/shared/cloudinary/cloudinary.service';
 
 @ApiTags('users')
 @Controller('users')

@@ -28,7 +28,8 @@ import { KnexModule } from './infrastructure/knex/knex.module';
     WinstonModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const isProduction = configService.get<string>('APP_ENV') === 'production';
+        // Sử dụng app.env (đã được map từ NODE_ENV trong config)
+        const isProduction = configService.get<string>('app.env') === 'production';
         
         const transports: winston.transport[] = [
           new winston.transports.Console({

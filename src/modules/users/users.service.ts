@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, Inject } from '@nestjs/common';
 import { Knex } from 'knex';
-import { KNEX_CONNECTION } from '../../infrastructure/knex/knex.module';
-import { BaseRepository } from '../../infrastructure/repositories/base.repository';
+import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
+import { BaseRepository } from '@/infrastructure/repositories/base.repository';
 import { User } from './interfaces/user.model';
 import { CreateUserDto } from './dtos/create-user.dto';
 import * as bcrypt from 'bcryptjs';
