@@ -22,7 +22,7 @@ export class CreateUserDto {
   @MinLength(6)
   password: string;
 
-  @ApiProperty({ example: 'https://res.cloudinary.com/...' })
+  @ApiProperty({ example: 'https://picsum.photos/200/300' })
   @IsString()
   @IsOptional()
   avatarUrl?: string;

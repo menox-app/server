@@ -23,12 +23,25 @@ export class TransformInterceptor<T>
     next: CallHandler,
   ): Observable<Response<T>> {
     return next.handle().pipe(
-      map((data) => ({
-        success: true,
-        statusCode: context.switchToHttp().getResponse().statusCode,
-        data,
-        timestamp: new Date().toISOString(),
-      })),
+      map((responseData) => {
+        if(responseData &&
+          typeof responseData === 'object' &&
+          'data' in responseData
+        ) {
+          return {
+            success: true,
+            statusCode: context.switchToHttp().getResponse().statusCode,
+            ...responseData,
+            timestamp: new Date().toISOString(),
+          }
+        }
+        return {
+          success: true,
+          statusCode: context.switchToHttp().getResponse().statusCode,
+          data: responseData,
+          timestamp: new Date().toISOString(),
+        }
+      }),
     );
   }
 }

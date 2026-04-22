@@ -46,21 +46,20 @@ export class UsersService extends BaseRepository {
           id: randomUUID(),
           email: userData.email,
           username: userData.username,
-          displayName: userData.displayName || null,
-          passwordHash: hashedPassword,
-          avatarUrl: userData.avatarUrl || null,
-          updatedAt: new Date(), // Bổ sung để thỏa mãn ràng buộc NOT NULL của DB
+          display_name: userData.displayName || null,
+          password_hash: hashedPassword,
+          avatar_url: userData.avatarUrl || null,
+          updated_at: new Date(),
         })
         .returning('*');
 
       if (userData.avatarUrl) {
         await trx('user_avatars').insert({
           id: randomUUID(),
-          userId: user.id,
+          user_id: user.id,
           url: userData.avatarUrl,
-          publicId: avatarPublicId || null,
-          isCurrent: true,
-          // Bảng user_avatars cũng có createdAt NOT NULL mặc định là CURRENT_TIMESTAMP
+          public_id: avatarPublicId || null,
+          is_current: true,
         });
       }
 
@@ -69,8 +68,8 @@ export class UsersService extends BaseRepository {
   }
 
   async updateProfile(id: string, data: { displayName?: string; bio?: string }): Promise<User> {
-    const updateData: Record<string, any> = { updatedAt: new Date() };
-    if (data.displayName !== undefined) updateData.displayName = data.displayName;
+    const updateData: Record<string, any> = { updated_at: new Date() };
+    if (data.displayName !== undefined) updateData.display_name = data.displayName;
     if (data.bio !== undefined) updateData.bio = data.bio;
 
     const user = await this.update('users', id, updateData);
@@ -83,19 +82,19 @@ export class UsersService extends BaseRepository {
     return this.transaction(async (trx) => {
       const [user] = await trx('users')
         .where({ id })
-        .update({ avatarUrl, updatedAt: new Date() })
+        .update({ avatar_url: avatarUrl, updated_at: new Date() })
         .returning('*');
 
       await trx('user_avatars')
-        .where({ userId: id, isCurrent: true })
-        .update({ isCurrent: false });
+        .where({ user_id: id, is_current: true })
+        .update({ is_current: false });
 
       await trx('user_avatars').insert({
         id: randomUUID(),
-        userId: id,
+        user_id: id,
         url: avatarUrl,
-        publicId: avatarPublicId || null,
-        isCurrent: true,
+        public_id: avatarPublicId || null,
+        is_current: true,
       });
 
       return this.mapRow(user);
@@ -107,21 +106,22 @@ export class UsersService extends BaseRepository {
   }
 
   private mapRow(row: any): User {
-    return {
-      id: row.id,
-      email: row.email,
-      passwordHash: row.passwordHash,
-      username: row.username,
-      displayName: row.displayName,
-      avatarUrl: row.avatarUrl,
-      bio: row.bio,
-      isPro: row.isPro,
-      avatarFrameId: row.avatarFrameId,
-      role: row.role,
-      isVerified: row.isVerified,
-      isActive: row.isActive,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
-  }
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    isPro: row.is_pro,
+    avatarFrameId: row.avatar_frame_id,
+    role: row.role,
+    isVerified: row.is_verified,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 }

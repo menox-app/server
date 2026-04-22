@@ -11,6 +11,8 @@ import { HttpLoggerMiddleware } from './common/middleware/http-logger.middleware
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { KnexModule } from './infrastructure/knex/knex.module';
+import { PostsModule } from './modules/posts/posts.module';
+import { CommentsModule } from './modules/comments/comments.module';
 
 @Module({
   imports: [
@@ -68,6 +70,8 @@ import { KnexModule } from './infrastructure/knex/knex.module';
     // Features
     UsersModule,
     AuthModule,
+    PostsModule,
+    CommentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

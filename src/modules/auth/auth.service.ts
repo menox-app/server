@@ -86,21 +86,21 @@ export class AuthService {
     const ip = ipAddress || '0.0.0.0';
     
     const existingSession = await this.knex('sessions')
-      .where({ userId: userId, deviceInfo: info })
+      .where({ user_id: userId, device_info: info })
       .first();
 
     if (existingSession) {
       await this.knex('sessions')
         .where({ id: existingSession.id })
-        .update({ token, ipAddress: ip, expiresAt: expiresAt || new Date() });
+        .update({ token, ip_address: ip, expires_at: expiresAt || new Date() });
     } else {
       await this.knex('sessions').insert({
         id: randomUUID(),
-        userId: userId,
+        user_id: userId,
         token,
-        deviceInfo: info,
-        ipAddress: ip,
-        expiresAt: expiresAt || new Date(),
+        device_info: info,
+        ip_address: ip,
+        expires_at: expiresAt || new Date(),
       });
     }
   }
@@ -126,7 +126,7 @@ export class AuthService {
         secret: this.configService.getOrThrow<string>('app.jwtRefreshSecret'),
       });
 
-      const sessions = await this.knex('sessions').where({ userId: payload.id });
+      const sessions = await this.knex('sessions').where({ user_id: payload.id });
 
       let validSession: any = null;
       for (const session of sessions) {
