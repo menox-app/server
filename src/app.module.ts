@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { WinstonModule } from 'nest-winston';
 import * as winston from 'winston';
 import 'winston-daily-rotate-file';
@@ -14,6 +15,7 @@ import { KnexModule } from './infrastructure/knex/knex.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { CommentsModule } from './modules/comments/comments.module';
 import { FollowsModule } from './modules/follows/follows.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { FollowsModule } from './modules/follows/follows.module';
 
     // Infrastructure
     KnexModule,
+    EventEmitterModule.forRoot(),
 
     // Logging (Winston)
     WinstonModule.forRootAsync({
@@ -33,7 +36,7 @@ import { FollowsModule } from './modules/follows/follows.module';
       useFactory: (configService: ConfigService) => {
         // Sử dụng app.env (đã được map từ NODE_ENV trong config)
         const isProduction = configService.get<string>('app.env') === 'production';
-        
+
         const transports: winston.transport[] = [
           new winston.transports.Console({
             format: winston.format.combine(
@@ -74,6 +77,7 @@ import { FollowsModule } from './modules/follows/follows.module';
     PostsModule,
     CommentsModule,
     FollowsModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

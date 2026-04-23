@@ -5,11 +5,14 @@ import { CreateCommentDto } from './dtos/create-comment.dto';
 import { BaseRepository } from '@/infrastructure/repositories/base.repository';
 import { Collections } from '@/common/enums/collections.enum';
 import { GetCommentsDto } from './dtos/get-comments-dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { NOTIFICATION_EVENTS } from '../notifications/enums/notifications.enum';
 
 @Injectable()
 export class CommentsService extends BaseRepository {
     constructor(
         @Inject(KNEX_CONNECTION) knex: Knex,
+        private eventEmitter: EventEmitter2
     ) {
         super(knex);
     }
@@ -18,6 +21,7 @@ export class CommentsService extends BaseRepository {
         const { post_id, content, parent_id, type, media_url, media_metadata } = dto;
         let depth = 0;
 
+        // Check parent comment
         if (parent_id) {
             const parentComment = await this.findOneByCondition(Collections.POST_COMMENTS, { id: parent_id });
             if (!parentComment) {
@@ -26,6 +30,7 @@ export class CommentsService extends BaseRepository {
             depth = parentComment.depth + 1;
         }
 
+        // Create comment
         const [comment] = await this.knex(Collections.POST_COMMENTS).insert({
             user_id: userId,
             post_id,
@@ -36,6 +41,19 @@ export class CommentsService extends BaseRepository {
             media_metadata: media_metadata ? JSON.stringify(media_metadata) : null,
             depth,
         }).returning('*');
+
+        // Find post
+        const post = await this.knex(Collections.POSTS).where({ id: post_id }).first();
+
+        if (post.author_id !== userId) {
+            this.eventEmitter.emit(NOTIFICATION_EVENTS.POST_COMMENTED, {
+                actorId: userId,
+                recipientId: post.author_id,
+                postId: post_id,
+                commentContent: content,
+                parentId: parent_id,
+            });
+        }
 
         return comment;
     }

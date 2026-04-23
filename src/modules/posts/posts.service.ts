@@ -41,7 +41,6 @@ export class PostsService extends BaseRepository {
     }
 
     async findAllPosts(query: GetAllPostsDto, currentUserId?: string) {
-        console.log("🚀 ~ PostsService ~ findAllPosts ~ currentUserId:", currentUserId)
         const { page = 1, limit = 10, mode = PostFeedMode.ALL } = query;
         const offset = (page - 1) * limit;
 

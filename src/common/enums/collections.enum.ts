@@ -7,4 +7,5 @@ export enum Collections {
   POST_COMMENTS = 'post_comments',
   SESSIONS = 'sessions',
   FOLLOWS = 'follows',
+  NOTIFICATIONS = 'notifications',
 }

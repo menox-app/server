@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.io Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Socket.io Notification Test</h1>
+    <div id="status">Connecting...</div>
+    <ul id="messages"></ul>
+
+    <script>
+        // 1. Cấu hình đúng Namespace và Query Param
+        const socket = io("http://localhost:3000/notifications", {
+            query: {
+                userId: "4f902cae-fc04-4b81-82ad-3b9634374f3b" // 👈 Thay bằng ID của bạn
+            },
+            transports: ["websocket"]
+        });
+
+        const status = document.getElementById('status');
+        const messages = document.getElementById('messages');
+
+        socket.on("connect", () => {
+            status.innerHTML = "🟢 Connected to Namespace: /notifications";
+            status.style.color = "green";
+        });
+
+        socket.on("connect_error", (err) => {
+            status.innerHTML = "🔴 Connection Error: " + err.message;
+            status.style.color = "red";
+        });
+
+        // 2. Lắng nghe sự kiện thông báo
+        socket.on("new_notification", (data) => {
+            const li = document.createElement('li');
+            li.innerHTML = `<b>${data.type}</b>: ${data.message}`;
+            messages.appendChild(li);
+            console.log("New Notification received:", data);
+        });
+    </script>
+</body>
+</html>

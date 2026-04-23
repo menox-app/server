@@ -2,11 +2,16 @@ import { Collections } from '@/common/enums/collections.enum';
 import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
 import { BaseRepository } from '@/infrastructure/repositories/base.repository';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Knex } from 'knex';
+import { NOTIFICATION_EVENTS } from '../notifications/enums/notifications.enum';
 
 @Injectable()
 export class FollowsService extends BaseRepository {
-    constructor(@Inject(KNEX_CONNECTION) knex: Knex) {
+    constructor(
+        @Inject(KNEX_CONNECTION) knex: Knex,
+        private eventEmitter: EventEmitter2
+    ) {
         super(knex);
     }
 
@@ -33,6 +38,12 @@ export class FollowsService extends BaseRepository {
             follower_id: followerId,
             following_id: followingId,
         });
+
+        this.eventEmitter.emit(NOTIFICATION_EVENTS.USER_FOLLOWED, {
+            followerId,
+            followingId
+        });
+        
         return { message: 'Followed successfully', is_following: true };
     }
 }

@@ -48,8 +48,7 @@ export class AuthGuard implements CanActivate {
       const payload = await this.jwtService.verifyAsync(token, {
         secret: this.configService.getOrThrow<string>('app.jwtSecret'),
       });
-      console.log("🚀 ~ AuthGuard ~ canActivate ~ payload:", payload)
-
+      
       // 3. Lấy thông tin user từ database (có thể dùng cache sau này)
       const user = await this.usersService.findOneUser(payload.id || payload.sub);
 
