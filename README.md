@@ -1,98 +1,95 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🚀 Menox Social Platform Server
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Menox Server là hệ thống Backend mạnh mẽ, có khả năng mở rộng cao, được xây dựng bằng NestJS. Dự án tập trung vào trải nghiệm người dùng mạng xã hội với Feed cá nhân hóa và hệ thống thông báo thời gian thực (Real-time Notifications).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## ✨ Key Features
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- 🔐 **Authentication**: Hệ thống Auth bảo mật với JWT, Refresh Token và Multi-device session tracking.
+- 📱 **Social Graph**: Hệ thống Follow/Unfollow hiệu quả, tối ưu hóa truy vấn Social Stats.
+- 📰 **Personalized Feed**: Thuật toán fetch bài viết theo chế độ "Following" (chỉ thấy người mình quan tâm) và "Discovery".
+- 🔔 **Real-time Notifications**: Kiến trúc hướng sự kiện (Event-Driven) thông báo tức thì qua Socket.io.
+- 💬 **Interactions**: Hệ thống bình luận đa cấp (Nested Comments).
+- ☁️ **Media Management**: Tích hợp Cloudinary để xử lý hình ảnh/video.
 
-## Project setup
+---
 
-```bash
-$ yarn install
+## 🏗️ Architecture Design
+
+Dự án áp dụng các nguyên lý thiết kế phần mềm tiên tiến:
+
+- **Modular Monolith**: Chia tách các tính năng (Users, Posts, Notifications) thành các module độc lập.
+- **Event-Driven Architecture**: Sử dụng `EventEmitter2` để tách rời (decouple) logic nghiệp vụ chính và các side-effects (như gửi thông báo).
+- **Dependency Inversion**: Triển khai `NotificationProvider` abstract layer, cho phép dễ dàng chuyển đổi giữa Socket.io, Ably, hoặc Novu.
+- **Repository Pattern**: Sử dụng Knex.js với BaseRepository để tối ưu hóa việc tương tác với SQL Database.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework**: [NestJS](https://nestjs.com/) (Node.js)
+- **Database**: PostgreSQL / MySQL
+- **Query Builder**: [Knex.js](https://knexjs.org/)
+- **Real-time**: [Socket.io](https://socket.io/)
+- **Security**: JWT, Bcrypt, Passport
+- **Validation**: Class-validator & Zod
+- **Documentation**: [Swagger / OpenAPI 3.0](https://swagger.io/)
+
+---
+
+## 📂 Project Structure
+
+```text
+src/
+├── common/             # Các hằng số, decorators, filters, guards dùng chung
+├── configs/            # Cấu hình môi trường (Environment Config)
+├── infrastructure/     # Database (Knex), Migrations, Repositories
+└── modules/            # Các module tính năng chính
+    ├── auth/           # Login, Register, Session management
+    ├── users/          # User profile, Social stats
+    ├── posts/          # Feed logic, Post creation
+    ├── comments/       # Interaction logic
+    └── notifications/  # Event-Driven notification system
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ yarn run start
+## 🚀 Getting Started
 
-# watch mode
-$ yarn run start:dev
+### Prerequisites
+- Node.js (v18+)
+- Docker (Optional for DB)
+- PostgreSQL / MySQL
 
-# production mode
-$ yarn run start:prod
-```
+### Installation
+1. Clone dự án:
+   ```bash
+   git clone <your-repo-url>
+   ```
+2. Cài đặt dependencies:
+   ```bash
+   npm install
+   ```
+3. Cấu hình môi trường:
+   Sao chép `.env.example` thành `.env` và điền các thông tin cần thiết.
+4. Khởi tạo Database:
+   ```bash
+   npm run migrate:latest
+   npm run seed:run
+   ```
+5. Chạy dự án:
+   ```bash
+   npm run start:dev
+   ```
 
-## Run tests
+---
 
-```bash
-# unit tests
-$ yarn run test
+## 📑 API Documentation
+Sau khi chạy server, bạn có thể truy cập tài liệu API tại:
+`http://localhost:3000/api-docs`
 
-# e2e tests
-$ yarn run test:e2e
+---
 
-# test coverage
-$ yarn run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ yarn install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## 🛡️ License
+Distributed under the MIT License. See `LICENSE` for more information.
