@@ -5,7 +5,7 @@ import { Knex } from 'knex';
 import { CreatePostDto } from './dtos/create-post.dto';
 import { randomUUID } from 'crypto';
 import { Collections } from '@/common/enums/collections.enum';
-import { GetAllPostsDto } from './dtos/get-all-post.dto';
+import { GetAllPostsDto, PostFeedMode } from './dtos/get-all-post.dto';
 
 @Injectable()
 export class PostsService extends BaseRepository {
@@ -41,7 +41,8 @@ export class PostsService extends BaseRepository {
     }
 
     async findAllPosts(query: GetAllPostsDto, currentUserId?: string) {
-        const { page = 1, limit = 10 } = query;
+        console.log("🚀 ~ PostsService ~ findAllPosts ~ currentUserId:", currentUserId)
+        const { page = 1, limit = 10, mode = PostFeedMode.ALL } = query;
         const offset = (page - 1) * limit;
 
         // 1. Query lấy tổng số lượng bản ghi để phân trang
@@ -55,6 +56,14 @@ export class PostsService extends BaseRepository {
         // 2. Query lấy dữ liệu chính (Dùng JSON Aggregation)
         const queryBuilder = this.knex(Collections.POSTS)
             .join(Collections.USERS, 'posts.author_id', 'users.id');
+
+        if (mode === PostFeedMode.FOLLOWING && currentUserId) {
+            queryBuilder.whereIn('author_id', (qb) => {
+                qb.select('following_id')
+                    .from(Collections.FOLLOWS)
+                    .where({ follower_id: currentUserId })
+            })
+        }
 
         const selectColumns = [
             'posts.*',

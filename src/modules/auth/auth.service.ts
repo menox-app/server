@@ -48,7 +48,7 @@ export class AuthService {
   private async loginWithPassword(email: string, pass: string, deviceInfo?: string, ipAddress?: string) {
     const user = (await this.usersService.findByEmail(email)) as any;
     
-    if (!user || !user.passwordHash || !(await bcrypt.compare(pass, user.passwordHash))) {
+    if (!user || !user.password_hash  || !(await bcrypt.compare(pass, user.password_hash ))) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

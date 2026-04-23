@@ -6,6 +6,7 @@ import { User } from './interfaces/user.model';
 import { CreateUserDto } from './dtos/create-user.dto';
 import * as bcrypt from 'bcryptjs';
 import { randomUUID } from 'crypto';
+import { Collections } from '@/common/enums/collections.enum';
 
 @Injectable()
 export class UsersService extends BaseRepository {
@@ -13,27 +14,24 @@ export class UsersService extends BaseRepository {
     super(knex);
   }
 
-  async findAllUsers(): Promise<User[]> {
-    const rows = await this.knex('users').select('*');
-    return rows.map((row) => this.mapRow(row));
+  async findAllUsers(currentUserId?: string) {
+    const query = this.knex(Collections.USERS);
+    const users = await this.applyUserStats(query, currentUserId);
+    return users.map(u => this.formatUserResponse(u));
   }
 
-  async findOneUser(id: string): Promise<User> {
-    const user = await this.findById('users', id);
-    if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
-    return this.mapRow(user);
+  async findOneUser(id: string, currentUserId?: string) {
+    const query = this.knex(Collections.USERS).where({ id });
+    const user = await this.applyUserStats(query, currentUserId).first();
+    if (!user) throw new NotFoundException(`User with ID ${id} not found`);
+    return this.formatUserResponse(user);
   }
 
-  async findByEmail(email: string): Promise<User | null> {
-    const row = await this.findOneByCondition('users', { email });
-    return row ? this.mapRow(row) : null;
+  async findByEmail(email: string) {
+    return this.findOneByCondition(Collections.USERS, { email });
   }
-
-  async findByUsername(username: string): Promise<User | null> {
-    const row = await this.findOneByCondition('users', { username });
-    return row ? this.mapRow(row) : null;
+  async findByUsername(username: string) {
+    return this.findOneByCondition(Collections.USERS, { username });
   }
 
   async createUser(createUserDto: CreateUserDto): Promise<User> {
@@ -41,7 +39,7 @@ export class UsersService extends BaseRepository {
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
     return this.transaction(async (trx) => {
-      const [user] = await trx('users')
+      const [user] = await trx(Collections.USERS)
         .insert({
           id: randomUUID(),
           email: userData.email,
@@ -54,7 +52,7 @@ export class UsersService extends BaseRepository {
         .returning('*');
 
       if (userData.avatarUrl) {
-        await trx('user_avatars').insert({
+        await trx(Collections.USER_AVATARS).insert({
           id: randomUUID(),
           user_id: user.id,
           url: userData.avatarUrl,
@@ -63,7 +61,7 @@ export class UsersService extends BaseRepository {
         });
       }
 
-      return this.mapRow(user);
+      return user;
     });
   }
 
@@ -72,24 +70,24 @@ export class UsersService extends BaseRepository {
     if (data.displayName !== undefined) updateData.display_name = data.displayName;
     if (data.bio !== undefined) updateData.bio = data.bio;
 
-    const user = await this.update('users', id, updateData);
-    return this.mapRow(user);
+    const user = await this.update(Collections.USERS, id, updateData);
+    return user;
   }
 
   async updateAvatar(id: string, data: { avatarUrl: string; avatarPublicId?: string }): Promise<User> {
     const { avatarUrl, avatarPublicId } = data;
 
     return this.transaction(async (trx) => {
-      const [user] = await trx('users')
+      const [user] = await trx(Collections.USERS)
         .where({ id })
         .update({ avatar_url: avatarUrl, updated_at: new Date() })
         .returning('*');
 
-      await trx('user_avatars')
+      await trx(Collections.USER_AVATARS)
         .where({ user_id: id, is_current: true })
         .update({ is_current: false });
 
-      await trx('user_avatars').insert({
+      await trx(Collections.USER_AVATARS).insert({
         id: randomUUID(),
         user_id: id,
         url: avatarUrl,
@@ -97,31 +95,46 @@ export class UsersService extends BaseRepository {
         is_current: true,
       });
 
-      return this.mapRow(user);
+      return user;
     });
   }
 
   async remove(id: string): Promise<void> {
-    await this.delete('users', id);
+    await this.delete(Collections.USERS, id);
   }
 
-  private mapRow(row: any): User {
-  return {
-    id: row.id,
-    email: row.email,
-    passwordHash: row.password_hash,
-    username: row.username,
-    displayName: row.display_name,
-    avatarUrl: row.avatar_url,
-    bio: row.bio,
-    isPro: row.is_pro,
-    avatarFrameId: row.avatar_frame_id,
-    role: row.role,
-    isVerified: row.is_verified,
-    isActive: row.is_active,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
+
+  private applyUserStats(query: Knex.QueryBuilder, currentUserId?: string) {
+    return query.select([
+      'id', 'username', 'email', 'display_name', 'avatar_url', 'bio', 'is_active', 'is_verified', 'role', 'created_at', 'updated_at'
+    ]).select({
+      follower_count: this.knex(Collections.FOLLOWS)
+        .count('*').whereRaw(`${Collections.FOLLOWS}.following_id = ${Collections.USERS}.id`),
+
+      following_count: this.knex(Collections.FOLLOWS)
+        .count('*').whereRaw(`${Collections.FOLLOWS}.follower_id = ${Collections.USERS}.id`),
+
+      post_count: this.knex(Collections.POSTS)
+        .count('*').whereRaw(`${Collections.POSTS}.author_id = ${Collections.USERS}.id`),
+
+      is_following: this.knex(Collections.FOLLOWS)
+        .count('*')
+        .where({ follower_id: currentUserId || null })
+        .whereRaw(`${Collections.FOLLOWS}.following_id = ${Collections.USERS}.id`)
+    });
+  }
+
+  private formatUserResponse(user: any) {
+    if (!user) return null;
+    return {
+      ...user,
+      follower_count: Number(user.follower_count || 0),
+      following_count: Number(user.following_count || 0),
+      post_count: Number(user.post_count || 0),
+      is_following: Number(user.is_following || 0) > 0
+    };
+  }
 
 }
+
+

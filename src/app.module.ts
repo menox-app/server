@@ -13,6 +13,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { KnexModule } from './infrastructure/knex/knex.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { CommentsModule } from './modules/comments/comments.module';
+import { FollowsModule } from './modules/follows/follows.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { CommentsModule } from './modules/comments/comments.module';
     AuthModule,
     PostsModule,
     CommentsModule,
+    FollowsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -3,7 +3,7 @@ import { PostsService } from './posts.service';
 import { CreatePostDto } from './dtos/create-post.dto';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
-import { Public } from '@/common/decorators/public.decorator';
+import { Public, PublicOptional } from '@/common/decorators/public.decorator';
 import { GetAllPostsDto } from './dtos/get-all-post.dto';
 import { CommentsService } from '../comments/comments.service';
 import { GetCommentsDto } from '../comments/dtos/get-comments-dto';
@@ -24,22 +24,8 @@ export class PostsController {
     }
 
     @Get()
-    @Public()
+    @PublicOptional()
     @ApiOperation({ summary: 'Get all posts public' })
-    @ApiQuery({
-        name: 'page',
-        description: 'Page number',
-        required: false,
-        type: Number,
-        example: 1,
-    })
-    @ApiQuery({
-        name: 'limit',
-        description: 'Limit per page',
-        required: false,
-        type: Number,
-        example: 10,
-    })
     async findAll(
         @Req() req,
         @Query() query: GetAllPostsDto
@@ -56,22 +42,8 @@ export class PostsController {
     }
 
     @Get(':id/comments')
-    @Public()
+    @PublicOptional()
     @ApiOperation({ summary: 'Get all comments for a post' })
-    @ApiQuery({
-        name: 'page',
-        description: 'Page number',
-        required: false,
-        type: Number,
-        example: 1,
-    })
-    @ApiQuery({
-        name: 'limit',
-        description: 'Limit per page',
-        required: false,
-        type: Number,
-        example: 10,
-    })
     async getComments(@Param('id', ParseUUIDPipe) postId: string, @Query() query: GetCommentsDto) {
         return this.commentsService.findAllComments(postId, query);
     }
