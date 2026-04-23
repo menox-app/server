@@ -98,7 +98,7 @@ export class CommentsService extends BaseRepository {
                         ORDER BY p.created_at ASC
                         LIMIT 2
                     ) preview
-                ) as preview_replies
+                ) as replies
             `)
             ])
             .orderBy('post_comments.created_at', 'desc')

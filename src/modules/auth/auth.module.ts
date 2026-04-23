@@ -16,7 +16,7 @@ import { UsersModule } from '@/modules/users/users.module';
         global: true,
         secret: configService.getOrThrow<string>('app.jwtSecret'),
         signOptions: {
-          expiresIn: '1h', // Hardcoded cố định theo yêu cầu của bạn
+          expiresIn: '1h', 
         },
       }),
     }),
