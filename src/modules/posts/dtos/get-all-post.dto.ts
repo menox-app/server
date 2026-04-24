@@ -5,6 +5,7 @@ import { IsEnum, IsOptional } from "class-validator";
 export enum PostFeedMode {
     ALL = 'all',
     FOLLOWING = 'following',
+    TRENDING = 'trending'
 }
 export class GetAllPostsDto extends HttpQueryDto {
     @ApiProperty({

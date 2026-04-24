@@ -131,6 +131,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return await this.redisClient.zrevrange(key, start, end);
     }
 
+    async zincrby(key: string, increment: number, member: string) {
+    return await this.redisClient.zincrby(key, increment, member);
+}
+
     /**
      * =========================
      * 3. Nhóm HASHES (Dùng lưu trữ Object chi tiết)
