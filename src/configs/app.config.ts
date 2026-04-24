@@ -7,4 +7,6 @@ export default registerAs('app', () => ({
   apiPrefix: process.env.API_PREFIX || 'api',
   jwtSecret: process.env.JWT_SECRET || 'secret',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'refresh-secret',
+  memoryThreshold: parseInt(process.env.CACHE_CCU_THRESHOLD || '50', 10),
+  alertThreshold: parseInt(process.env.CCU_ALERT_THRESHOLD || '500', 10),
 }));

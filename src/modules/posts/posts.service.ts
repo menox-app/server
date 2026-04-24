@@ -6,10 +6,16 @@ import { CreatePostDto } from './dtos/create-post.dto';
 import { randomUUID } from 'crypto';
 import { Collections } from '@/common/enums/collections.enum';
 import { GetAllPostsDto, PostFeedMode } from './dtos/get-all-post.dto';
+import { AdaptiveCacheService } from '@/infrastructure/redis/adaptive-cache.service';
+import { RedisService } from '@/infrastructure/redis/redis.service';
 
 @Injectable()
 export class PostsService extends BaseRepository {
-    constructor(@Inject(KNEX_CONNECTION) knex: Knex) {
+    constructor(
+        @Inject(KNEX_CONNECTION) knex: Knex,
+        private readonly adaptiveCacheService: AdaptiveCacheService,
+        private readonly redisService: RedisService
+    ) {
         super(knex);
     }
 
@@ -36,6 +42,9 @@ export class PostsService extends BaseRepository {
                 await trx(Collections.POST_MEDIAS).insert(mediaData);
             }
 
+            // Clear cache
+            this.redisService.removeKeysByPrefix('posts:all');
+
             return post;
         })
     }
@@ -44,38 +53,42 @@ export class PostsService extends BaseRepository {
         const { page = 1, limit = 10, mode = PostFeedMode.ALL } = query;
         const offset = (page - 1) * limit;
 
-        // 1. Query lấy tổng số lượng bản ghi để phân trang
-        const [{ count }] = await this.knex(Collections.POSTS)
-            .where({ visibility: 'public' })
-            .count('* as count');
+        const cacheKey = `posts:all:${JSON.stringify(query)}`;
+        return this.adaptiveCacheService.getOrSet(
+            cacheKey,
+            async () => {
+                // 1. Query lấy tổng số lượng bản ghi để phân trang
+                const [{ count }] = await this.knex(Collections.POSTS)
+                    .where({ visibility: 'public' })
+                    .count('* as count');
 
-        const totalItems = Number(count);
-        const totalPages = Math.ceil(totalItems / limit);
+                const totalItems = Number(count);
+                const totalPages = Math.ceil(totalItems / limit);
 
-        // 2. Query lấy dữ liệu chính (Dùng JSON Aggregation)
-        const queryBuilder = this.knex(Collections.POSTS)
-            .join(Collections.USERS, 'posts.author_id', 'users.id');
+                // 2. Query lấy dữ liệu chính (Dùng JSON Aggregation)
+                const queryBuilder = this.knex(Collections.POSTS)
+                    .join(Collections.USERS, 'posts.author_id', 'users.id');
 
-        if (mode === PostFeedMode.FOLLOWING && currentUserId) {
-            queryBuilder.whereIn('author_id', (qb) => {
-                qb.select('following_id')
-                    .from(Collections.FOLLOWS)
-                    .where({ follower_id: currentUserId })
-            })
-        }
+                if (mode === PostFeedMode.FOLLOWING && currentUserId) {
+                    queryBuilder.whereIn('author_id', (qb) => {
+                        qb.select('following_id')
+                            .from(Collections.FOLLOWS)
+                            .where({ follower_id: currentUserId })
+                    })
+                }
 
-        const selectColumns = [
-            'posts.*',
-            // Author object
-            this.knex.raw(`
+                const selectColumns = [
+                    'posts.*',
+                    // Author object
+                    this.knex.raw(`
                 jsonb_build_object(
                     'username', users.username,
                     'display_name', users.display_name,
                     'avatar_url', users.avatar_url
                 ) as author
             `),
-            // Medias array
-            this.knex.raw(`
+                    // Medias array
+                    this.knex.raw(`
                 COALESCE(
                     (SELECT jsonb_agg(m.*) 
                      FROM post_medias m 
@@ -83,47 +96,52 @@ export class PostsService extends BaseRepository {
                     '[]'::jsonb
                 ) as medias
             `),
-            // Like count
-            this.knex(Collections.POST_REACTIONS)
-                .count('*')
-                .where({ 'post_id': this.knex.ref('posts.id') })
-                .as('like_count'),
-        ];
+                    // Like count
+                    this.knex(Collections.POST_REACTIONS)
+                        .count('*')
+                        .where({ 'post_id': this.knex.ref('posts.id') })
+                        .as('like_count'),
+                ];
 
-        if (currentUserId) {
-            const isLikedSubquery = this.knex(Collections.POST_REACTIONS)
-                .count('*')
-                .where({
-                    'post_id': this.knex.ref('posts.id'),
-                    'user_id': currentUserId
-                })
-                .as('is_liked');
-            selectColumns.push(isLikedSubquery);
-        } else {
-            selectColumns.push(this.knex.raw('0 as is_liked'));
-        }
+                if (currentUserId) {
+                    const isLikedSubquery = this.knex(Collections.POST_REACTIONS)
+                        .count('*')
+                        .where({
+                            'post_id': this.knex.ref('posts.id'),
+                            'user_id': currentUserId
+                        })
+                        .as('is_liked');
+                    selectColumns.push(isLikedSubquery);
+                } else {
+                    selectColumns.push(this.knex.raw('0 as is_liked'));
+                }
 
-        const posts = await queryBuilder
-            .select(selectColumns)
-            .where({ 'posts.visibility': 'public' })
-            .orderBy('posts.created_at', 'desc')
-            .limit(limit)
-            .offset(offset);
+                const posts = await queryBuilder
+                    .select(selectColumns)
+                    .where({ 'posts.visibility': 'public' })
+                    .orderBy('posts.created_at', 'desc')
+                    .limit(limit)
+                    .offset(offset);
 
-        return {
-            data: posts.map(p => ({
-                ...p,
-                like_count: Number(p.like_count),
-                is_liked: Number(p.is_liked) > 0
-            })),
-            meta: {
-                total: totalItems,
-                page: page,
-                limit: limit,
-                total_pages: totalPages,
-                has_more: page < totalPages
-            }
-        };
+                return {
+                    data: posts.map(p => ({
+                        ...p,
+                        like_count: Number(p.like_count),
+                        is_liked: Number(p.is_liked) > 0
+                    })),
+                    meta: {
+                        total: totalItems,
+                        page: page,
+                        limit: limit,
+                        total_pages: totalPages,
+                        has_more: page < totalPages
+                    }
+                };
+
+            },
+            300
+        )
+
     }
 
     async reactionPost(userId: string, postId: string) {

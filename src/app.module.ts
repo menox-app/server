@@ -16,6 +16,9 @@ import { PostsModule } from './modules/posts/posts.module';
 import { CommentsModule } from './modules/comments/comments.module';
 import { FollowsModule } from './modules/follows/follows.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { RedisModule } from './infrastructure/redis/redis.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { CcuInterceptor } from './common/interceptors/ccu.interceptor';
 
 @Module({
   imports: [
@@ -28,6 +31,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 
     // Infrastructure
     KnexModule,
+    RedisModule,
     EventEmitterModule.forRoot(),
 
     // Logging (Winston)
@@ -80,7 +84,10 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     NotificationsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, {
+    provide: APP_INTERCEPTOR,
+    useClass: CcuInterceptor,
+  }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
