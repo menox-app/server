@@ -7,6 +7,8 @@ import * as winston from 'winston';
 import 'winston-daily-rotate-file';
 import { KnexModule } from './knex/knex.module';
 import { RedisModule } from './redis/redis.module';
+import { CloudinaryProvider } from './storage/providers/cloudinary.provider';
+import { StorageProvider } from './storage/storage.provider';
 
 @Global()
 @Module({
@@ -67,7 +69,14 @@ import { RedisModule } from './redis/redis.module';
 
         return { transports };
       },
-    }),
+    }), 
+  ],
+  providers: [
+    // Storage (Cloudinary)
+    {
+      provide: StorageProvider,
+      useClass: CloudinaryProvider,
+    }
   ],
   exports: [
     KnexModule,
@@ -75,6 +84,7 @@ import { RedisModule } from './redis/redis.module';
     EventEmitterModule,
     ThrottlerModule,
     WinstonModule,
+    StorageProvider
   ],
 })
 export class InfrastructureModule {}

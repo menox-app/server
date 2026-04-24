@@ -12,9 +12,9 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { ApplicationGuards } from './common/guards/application.guard';
 import { AppController } from './app.controller';
-import { SearchService } from './modules/search/search.service';
-import { SearchController } from './modules/search/search.controller';
 import { SearchModule } from './modules/search/search.module';
+import { UploadModule } from './modules/upload/upload.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -24,6 +24,9 @@ import { SearchModule } from './modules/search/search.module';
       load: configs,
       validationSchema,
     }),
+
+    // Schedule (Cron Jobs)
+    ScheduleModule.forRoot(),
 
     // Shared Infrastructure (Database, Redis, Events, Logging, Throttler)
     InfrastructureModule,
@@ -36,6 +39,7 @@ import { SearchModule } from './modules/search/search.module';
     FollowsModule,
     NotificationsModule,
     SearchModule,
+    UploadModule
   ],
   controllers: [AppController],
   providers: [

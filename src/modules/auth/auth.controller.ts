@@ -15,7 +15,6 @@ import { CreateUserDto } from '@/modules/users/dtos/create-user.dto';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { Public } from '@/common/decorators/public.decorator';
 
-@ApiTags('auth')
 @Controller('auth')
 @UseGuards(AuthGuard)
 export class AuthController {

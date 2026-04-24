@@ -8,4 +8,5 @@ export enum Collections {
   SESSIONS = 'sessions',
   FOLLOWS = 'follows',
   NOTIFICATIONS = 'notifications',
+  MEDIA = 'media',
 }
