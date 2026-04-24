@@ -12,6 +12,9 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { ApplicationGuards } from './common/guards/application.guard';
 import { AppController } from './app.controller';
+import { SearchService } from './modules/search/search.service';
+import { SearchController } from './modules/search/search.controller';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -32,6 +35,7 @@ import { AppController } from './app.controller';
     CommentsModule,
     FollowsModule,
     NotificationsModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [

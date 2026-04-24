@@ -41,7 +41,7 @@ export class HttpQueryDto {
 		required: false,
 		example: 'health',
 	})
-	search?: string;
+	q?: string;
 
 	@IsOptional()
 	@IsString()
