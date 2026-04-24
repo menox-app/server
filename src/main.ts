@@ -37,7 +37,7 @@ async function bootstrap() {
 
   // Sử dụng API_PREFIX từ config (.env)
   const apiPrefix = configService.get<string>('API_PREFIX') || 'api';
-  app.setGlobalPrefix(apiPrefix);
+  app.setGlobalPrefix(apiPrefix, { exclude: ['/'] });
 
   app.useGlobalPipes(
     new ValidationPipe({

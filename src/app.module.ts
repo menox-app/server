@@ -11,6 +11,7 @@ import { FollowsModule } from './modules/follows/follows.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { ApplicationGuards } from './common/guards/application.guard';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ApplicationGuards } from './common/guards/application.guard';
     FollowsModule,
     NotificationsModule,
   ],
+  controllers: [AppController],
   providers: [
     ...ApplicationGuards,
   ],

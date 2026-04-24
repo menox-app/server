@@ -75,4 +75,31 @@ export class NotificationsListener {
         });
     }
 
+    @OnEvent(NOTIFICATION_EVENTS.POST_LIKED)
+    async handlePostLiked(payload: { actorId: string; recipientId: string; postId: string }) {
+        console.log('🔔 Processing notification for post reaction...');
+
+        const actor = await this.usersService.findOneUser(payload.actorId);
+
+        await this.notificationsService.createNotification({
+            recipient_id: payload.recipientId,
+            actor_id: payload.actorId,
+            type: NotificationType.LIKE,
+            entity_id: payload.postId,
+            content: `${actor.display_name} đã thích bài viết của bạn`,
+        });
+
+        this.notificationProvider.sendToUser(payload.recipientId, PubSubEvent.NEW_NOTIFICATION, {
+            type: NotificationType.LIKE,
+            message: `${actor.display_name} đã thích bài viết của bạn`,
+            actor: {
+                id: actor.id,
+                username: actor.username,
+                display_name: actor.display_name,
+                avatar_url: actor.avatar_url,
+            },
+            entity_id: payload.postId,
+            created_at: new Date(),
+        });
+    }
 }

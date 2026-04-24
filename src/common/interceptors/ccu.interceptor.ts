@@ -31,6 +31,11 @@ export class CcuInterceptor implements NestInterceptor {
     intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
         const client = this.redisService.getClient();
 
+        // Nếu Redis chưa sẵn sàng (đang kết nối hoặc bị ngắt), bỏ qua để không gây lỗi log
+        if (client.status !== 'ready') {
+            return next.handle();
+        }
+
         /**
          * STEP 1: On Request Start
          * Increment the CCU counter and refresh the TTL
@@ -51,10 +56,12 @@ export class CcuInterceptor implements NestInterceptor {
          */
         return next.handle().pipe(
             finalize(() => {
-                client.decr(CCU_REDIS_KEY).then((val) => {
-                    // Safety check: reset to 0 if the counter somehow drifts below zero
-                    if (val < 0) client.set(CCU_REDIS_KEY, '0');
-                }).catch(() => { });
+                if (client.status === 'ready') {
+                    client.decr(CCU_REDIS_KEY).then((val) => {
+                        // Safety check: reset to 0 if the counter somehow drifts below zero
+                        if (val < 0) client.set(CCU_REDIS_KEY, '0');
+                    }).catch(() => { });
+                }
             }),
         );
     }
