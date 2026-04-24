@@ -8,13 +8,15 @@ import { Collections } from '@/common/enums/collections.enum';
 import { GetAllPostsDto, PostFeedMode } from './dtos/get-all-post.dto';
 import { AdaptiveCacheService } from '@/infrastructure/redis/adaptive-cache.service';
 import { RedisService } from '@/infrastructure/redis/redis.service';
+import { FollowsService } from '../follows/follows.service';
 
 @Injectable()
 export class PostsService extends BaseRepository {
     constructor(
         @Inject(KNEX_CONNECTION) knex: Knex,
         private readonly adaptiveCacheService: AdaptiveCacheService,
-        private readonly redisService: RedisService
+        private readonly redisService: RedisService,
+        private readonly followService: FollowsService
     ) {
         super(knex);
     }
@@ -70,32 +72,43 @@ export class PostsService extends BaseRepository {
                     .join(Collections.USERS, 'posts.author_id', 'users.id');
 
                 if (mode === PostFeedMode.FOLLOWING && currentUserId) {
-                    queryBuilder.whereIn('author_id', (qb) => {
-                        qb.select('following_id')
-                            .from(Collections.FOLLOWS)
-                            .where({ follower_id: currentUserId })
-                    })
+                    const followingIds = await this.getFollowingIds(currentUserId);
+                    if (followingIds.length > 0) {
+                        queryBuilder.whereIn('author_id', followingIds)
+                    } else {
+                        return {
+                            data: [],
+                            meta: {
+                                total: 0,
+                                page: page,
+                                limit: limit,
+                                total_pages: 0,
+                                has_more: false
+                            }
+                        }
+                    }
+
                 }
 
                 const selectColumns = [
                     'posts.*',
                     // Author object
                     this.knex.raw(`
-                jsonb_build_object(
-                    'username', users.username,
-                    'display_name', users.display_name,
-                    'avatar_url', users.avatar_url
-                ) as author
-            `),
+                        jsonb_build_object(
+                            'username', users.username,
+                            'display_name', users.display_name,
+                            'avatar_url', users.avatar_url
+                        ) as author
+                    `),
                     // Medias array
                     this.knex.raw(`
-                COALESCE(
-                    (SELECT jsonb_agg(m.*) 
-                     FROM post_medias m 
-                     WHERE m.post_id = posts.id),
-                    '[]'::jsonb
-                ) as medias
-            `),
+                        COALESCE(
+                            (SELECT jsonb_agg(m.*) 
+                             FROM post_medias m 
+                             WHERE m.post_id = posts.id),
+                            '[]'::jsonb
+                        ) as medias
+                    `),
                     // Like count
                     this.knex(Collections.POST_REACTIONS)
                         .count('*')
@@ -157,5 +170,23 @@ export class PostsService extends BaseRepository {
             type: 'like',
         });
         return { is_liked: true };
+    }
+
+    private async getFollowingIds(userId: string): Promise<string[]> {
+        const redisKey = `user:following:${userId}`;
+        let ids = await this.redisService.smembers(redisKey);
+        // Nếu Redis trống, hãy lấy từ DB "cứu" dữ liệu
+        if (ids.length === 0) {
+            const follows = await this.knex(Collections.FOLLOWS)
+                .where({ follower_id: userId })
+                .select('following_id');
+
+            ids = follows.map(f => f.following_id);
+            // Nạp lại vào Redis cho lần sau nhanh
+            if (ids.length > 0) {
+                await this.redisService.sadd(redisKey, ...ids);
+            }
+        }
+        return ids;
     }
 }

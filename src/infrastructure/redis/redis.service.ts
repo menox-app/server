@@ -90,13 +90,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
  */
 
     // Thêm một ID vào Set (ví dụ: User A follow User B)
-    async sadd(key: string, member: string) {
-        return await this.redisClient.sadd(key, member);
+    async sadd(key: string, ...member: string[]) {
+        return await this.redisClient.sadd(key, ...member);
     }
 
     // Xóa một ID khỏi Set (ví dụ: Unfollow)
-    async srem(key: string, member: string) {
-        return await this.redisClient.srem(key, member);
+    async srem(key: string, ...member: string[]) {
+        return await this.redisClient.srem(key, ...member);
+    }
+
+    // Lấy toàn bộ thành viên trong Set
+    async smembers(key: string): Promise<string[]> {
+        return await this.redisClient.smembers(key);
     }
 
     // Kiểm tra nhanh sự tồn tại (ví dụ: User A đã follow User B chưa?)
