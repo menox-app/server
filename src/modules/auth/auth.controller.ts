@@ -14,7 +14,9 @@ import { LoginDto } from '@/modules/auth/dtos/login.dto';
 import { CreateUserDto } from '@/modules/users/dtos/create-user.dto';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { Public } from '@/common/decorators/public.decorator';
+import { RefreshTokenDto } from './dtos/refresh-token.dto';
 
+@ApiTags('Auth')
 @Controller('auth')
 @UseGuards(AuthGuard)
 export class AuthController {
@@ -40,20 +42,21 @@ export class AuthController {
     return this.authService.register(createUserDto, deviceInfo, ipAddress);
   }
 
-  @Post('refresh-token')
+  @Public()
+  @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get new access token from refresh token' })
-  async refreshToken(@Body('refresh_token') token: string, @Request() req: any) {
+  async refreshToken(@Body() refreshTokenDto: RefreshTokenDto, @Request() req: any) {
     const deviceInfo = req.headers['user-agent'];
     const ipAddress = req.ip;
-    return this.authService.refreshTokens(token, deviceInfo, ipAddress);
+    return this.authService.refreshTokens(refreshTokenDto.refresh_token, deviceInfo, ipAddress);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout from the system' })
-  async logout(@Body('refresh_token') token: string) {
-    return this.authService.logout(token);
+  async logout(@Body() refreshTokenDto: RefreshTokenDto) {
+    return this.authService.logout(refreshTokenDto.refresh_token);
   }
 
   @Get('me')
