@@ -163,8 +163,8 @@ export class PostsService extends BaseRepository {
 
             const posts = await this.fetchPostsDetails(postIds, userId);
             return { data: posts, meta: { page, limit, has_more: postIds.length === limit } };
-        } catch (error) {
-            this.logger.error(`Redis Feed error: ${error.message}`);
+        } catch (error: any) {
+            this.logger.error(`Redis Feed error: ${error?.message}`);
             return { data: [], meta: { page, limit, has_more: false } };
         }
     }
@@ -258,6 +258,42 @@ export class PostsService extends BaseRepository {
             this.knex.raw(`jsonb_build_object('username', users.username, 'display_name', users.display_name, 'avatar_url', users.avatar_url) as author`),
             this.knex.raw(`COALESCE((SELECT jsonb_agg(m.*) FROM post_medias m WHERE m.post_id = posts.id), '[]'::jsonb) as medias`),
             this.knex(Collections.POST_REACTIONS).count('*').where({ 'post_id': this.knex.ref('posts.id') }).as('like_count'),
+            this.knex(Collections.POST_COMMENTS).count('*').where({ 'post_id': this.knex.ref('posts.id') }).as('comment_count'),
+            this.knex.raw(`
+                COALESCE((
+                    SELECT jsonb_agg(to_jsonb(highlight) ORDER BY highlight.reply_count DESC, highlight.created_at DESC)
+                    FROM (
+                        SELECT
+                            pc.id,
+                            pc.post_id,
+                            pc.user_id,
+                            pc.parent_id,
+                            pc.content,
+                            pc.depth,
+                            pc.type,
+                            pc.media_url,
+                            pc.media_metadata,
+                            pc.created_at,
+                            pc.updated_at,
+                            (
+                                SELECT count(*)::int
+                                FROM post_comments replies
+                                WHERE replies.parent_id = pc.id
+                            ) as reply_count,
+                            jsonb_build_object(
+                                'username', comment_users.username,
+                                'display_name', comment_users.display_name,
+                                'avatar_url', comment_users.avatar_url
+                            ) as author
+                        FROM post_comments pc
+                        JOIN users comment_users ON pc.user_id = comment_users.id
+                        WHERE pc.post_id = posts.id
+                          AND pc.parent_id IS NULL
+                        ORDER BY reply_count DESC, pc.created_at DESC
+                        LIMIT 2
+                    ) highlight
+                ), '[]'::jsonb) as highlight_comments
+            `),
         ];
 
         if (currentUserId) {
@@ -279,15 +315,40 @@ export class PostsService extends BaseRepository {
     }
 
     private async mapFollowStatus(posts: any[], currentUserId?: string) {
-        if (!currentUserId || posts.length === 0) return posts.map(p => ({ ...p, is_following_author: false }));
+        if (!currentUserId || posts.length === 0) {
+            return posts.map(p => this.normalizePostResponse(p, false));
+        }
+
         const authorIds = [...new Set(posts.map(p => p.author_id))];
         const followMap = await this.followService.batchIsFollowing(currentUserId, authorIds);
-        return posts.map(p => ({ 
-            ...p, 
-            is_following_author: !!followMap[p.author_id], 
-            like_count: Number(p.like_count), 
-            is_liked: Number(p.is_liked) > 0 
-        }));
+        return posts.map(p => this.normalizePostResponse(p, !!followMap[p.author_id]));
+    }
+
+    private normalizePostResponse(post: any, isFollowingAuthor: boolean) {
+        return {
+            ...post,
+            is_following_author: isFollowingAuthor,
+            like_count: Number(post.like_count || 0),
+            comment_count: Number(post.comment_count || 0),
+            is_liked: Number(post.is_liked || 0) > 0,
+            highlight_comments: this.normalizeJsonArray(post.highlight_comments),
+        };
+    }
+
+    private normalizeJsonArray(value: any) {
+        if (Array.isArray(value)) return value;
+        if (!value) return [];
+
+        if (typeof value === 'string') {
+            try {
+                const parsed = JSON.parse(value);
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return [];
+            }
+        }
+
+        return [];
     }
 
     private async getFollowingIds(userId: string): Promise<string[]> {
