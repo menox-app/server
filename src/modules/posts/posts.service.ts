@@ -290,7 +290,7 @@ export class PostsService extends BaseRepository {
                         WHERE pc.post_id = posts.id
                           AND pc.parent_id IS NULL
                         ORDER BY reply_count DESC, pc.created_at DESC
-                        LIMIT 2
+                        LIMIT 1
                     ) highlight
                 ), '[]'::jsonb) as highlight_comments
             `),
