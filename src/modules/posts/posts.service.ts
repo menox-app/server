@@ -51,29 +51,44 @@ export class PostsService extends BaseRepository {
                 const mediaIds = [...new Set(medias
                     .map((media) => media.mediaId)
                     .filter((mediaId): mediaId is string => !!mediaId))];
+                const mediaRowsById = new Map<string, any>();
 
                 if (mediaIds.length > 0) {
                     const ownedMediaRows = await trx(Collections.MEDIA)
                         .whereIn('id', mediaIds)
                         .where({ user_id: userId })
-                        .select('id');
+                        .select('*');
 
                     if (ownedMediaRows.length !== mediaIds.length) {
                         throw new BadRequestException('One or more media files are invalid');
                     }
+
+                    ownedMediaRows.forEach((row) => mediaRowsById.set(row.id, row));
                 }
 
-                const mediaData = medias.map((media, index) => ({
-                    id: randomUUID(),
-                    post_id: post.id,
-                    url: media.url,
-                    public_id: media.publicId || null,
-                    type: media.type,
-                    mime_type: media.mimeType || null,
-                    thumbnail_url: media.thumbnailUrl || null,
-                    metadata: media.metadata || null,
-                    sort_order: media.order ?? index,
-                }));
+                const mediaData = medias.map((media, index) => {
+                    const uploadedMedia = media.mediaId ? mediaRowsById.get(media.mediaId) : null;
+                    const url = uploadedMedia?.url || media.url;
+                    const type = uploadedMedia
+                        ? (uploadedMedia.mime_type?.startsWith('video') ? 'video' : 'image')
+                        : media.type;
+
+                    if (!url || !type) {
+                        throw new BadRequestException('Media url and type are required when mediaId is not provided');
+                    }
+
+                    return {
+                        id: randomUUID(),
+                        post_id: post.id,
+                        url,
+                        public_id: media.publicId || uploadedMedia?.remote_id || null,
+                        type,
+                        mime_type: media.mimeType || uploadedMedia?.mime_type || null,
+                        thumbnail_url: media.thumbnailUrl || null,
+                        metadata: media.metadata || uploadedMedia?.metadata || null,
+                        sort_order: media.order ?? index,
+                    };
+                });
                 await trx(Collections.POST_MEDIAS).insert(mediaData);
 
                 if (mediaIds.length > 0) {

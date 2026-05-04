@@ -15,7 +15,8 @@ export class CreatePostMediaDto {
 
     @ApiProperty({ example: 'https://res.cloudinary.com/demo/image/upload/v1/posts/images/file.jpg' })
     @IsUrl()
-    url!: string;
+    @IsOptional()
+    url?: string;
 
     @ApiProperty({ example: 'posts/images/file', required: false })
     @IsString()
@@ -24,7 +25,8 @@ export class CreatePostMediaDto {
 
     @ApiProperty({ enum: PostMediaType, example: PostMediaType.IMAGE })
     @IsEnum(PostMediaType)
-    type!: PostMediaType;
+    @IsOptional()
+    type?: PostMediaType;
 
     @ApiProperty({ example: 'image/jpeg', required: false })
     @IsString()

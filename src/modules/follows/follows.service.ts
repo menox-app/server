@@ -1,7 +1,7 @@
 import { Collections } from '@/common/enums/collections.enum';
 import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
 import { BaseRepository } from '@/infrastructure/repositories/base.repository';
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Knex } from 'knex';
 import { NOTIFICATION_EVENTS } from '../notifications/enums/notifications.enum';
@@ -9,6 +9,8 @@ import { RedisService } from '@/infrastructure/redis/redis.service';
 
 @Injectable()
 export class FollowsService extends BaseRepository {
+    private readonly logger = new Logger(FollowsService.name);
+
     constructor(
         @Inject(KNEX_CONNECTION) knex: Knex,
         private readonly eventEmitter: EventEmitter2,
@@ -35,10 +37,10 @@ export class FollowsService extends BaseRepository {
                 .where({ follower_id: followerId, following_id: followingId })
                 .delete();
 
-            await Promise.all([
+            await this.ignoreRedisErrors(() => Promise.all([
                 this.redisService.srem(`user:following:${followerId}`, followingId),
                 this.redisService.srem(`user:followers:${followingId}`, followerId),
-            ]);
+            ]));
 
             return { message: 'Unfollowed successfully', is_following: false };
         }
@@ -50,15 +52,15 @@ export class FollowsService extends BaseRepository {
         });
 
         // Add vào redis (Đảm bảo cache đã được warmed up để tránh mất dữ liệu cũ)
-        await Promise.all([
+        await this.ignoreRedisErrors(() => Promise.all([
             this.ensureFollowingCache(followerId),
             this.ensureFollowersCache(followingId)
-        ]);
+        ]));
 
-        await Promise.all([
+        await this.ignoreRedisErrors(() => Promise.all([
             this.redisService.sadd(`user:following:${followerId}`, followingId),
             this.redisService.sadd(`user:followers:${followingId}`, followerId),
-        ]);
+        ]));
 
         this.eventEmitter.emit(NOTIFICATION_EVENTS.USER_FOLLOWED, {
             followerId,
@@ -69,6 +71,14 @@ export class FollowsService extends BaseRepository {
     }
 
     async isFollowing(followerId: string, followingId: string) {
+        if (!this.isRedisReady()) {
+            const existingFollow = await this.findOneByCondition(Collections.FOLLOWS, {
+                follower_id: followerId,
+                following_id: followingId,
+            });
+            return !!existingFollow;
+        }
+
         const redisKey = `user:following:${followerId}`;
         
         // Warm up cache first
@@ -79,6 +89,10 @@ export class FollowsService extends BaseRepository {
 
     async batchIsFollowing(followerId: string, followingIds: string[]): Promise<Record<string, boolean>> {
         if (!followerId || followingIds.length === 0) return {};
+
+        if (!this.isRedisReady()) {
+            return this.batchIsFollowingFromDatabase(followerId, followingIds);
+        }
 
         await this.ensureFollowingCache(followerId);
 
@@ -104,6 +118,18 @@ export class FollowsService extends BaseRepository {
     }
 
     async getFollowStats(userId: string) {
+        if (!this.isRedisReady()) {
+            const [followingRow, followersRow] = await Promise.all([
+                this.knex(Collections.FOLLOWS).where({ follower_id: userId }).count('* as count').first(),
+                this.knex(Collections.FOLLOWS).where({ following_id: userId }).count('* as count').first(),
+            ]);
+
+            return {
+                following_count: Number(followingRow?.count || 0),
+                followers_count: Number(followersRow?.count || 0)
+            };
+        }
+
         await Promise.all([
             this.ensureFollowingCache(userId),
             this.ensureFollowersCache(userId)
@@ -127,6 +153,16 @@ export class FollowsService extends BaseRepository {
     }
 
     async getMutualFollows(user1Id: string, user2Id: string): Promise<string[]> {
+        if (!this.isRedisReady()) {
+            const rows = await this.knex(`${Collections.FOLLOWS} as f1`)
+                .join(`${Collections.FOLLOWS} as f2`, 'f1.following_id', 'f2.following_id')
+                .where('f1.follower_id', user1Id)
+                .where('f2.follower_id', user2Id)
+                .select('f1.following_id');
+
+            return rows.map((row) => row.following_id);
+        }
+
         await Promise.all([
             this.ensureFollowingCache(user1Id),
             this.ensureFollowingCache(user2Id)
@@ -143,6 +179,8 @@ export class FollowsService extends BaseRepository {
      * Ensures "Following" cache is warmed up
      */
     private async ensureFollowingCache(userId: string): Promise<void> {
+        if (!this.isRedisReady()) return;
+
         const redisKey = `user:following:${userId}`;
         const exists = await this.redisService.getClient().exists(redisKey);
 
@@ -166,6 +204,8 @@ export class FollowsService extends BaseRepository {
      * Ensures "Followers" cache is warmed up
      */
     private async ensureFollowersCache(userId: string): Promise<void> {
+        if (!this.isRedisReady()) return;
+
         const redisKey = `user:followers:${userId}`;
         const exists = await this.redisService.getClient().exists(redisKey);
 
@@ -181,6 +221,35 @@ export class FollowsService extends BaseRepository {
                 await this.redisService.getClient().sadd(redisKey, ...ids);
             }
             await this.redisService.getClient().expire(redisKey, 86400);
+        }
+    }
+
+    private async batchIsFollowingFromDatabase(followerId: string, followingIds: string[]): Promise<Record<string, boolean>> {
+        const uniqueFollowingIds = [...new Set(followingIds)];
+        const rows = await this.knex(Collections.FOLLOWS)
+            .where({ follower_id: followerId })
+            .whereIn('following_id', uniqueFollowingIds)
+            .select('following_id');
+
+        const followedIds = new Set(rows.map((row) => row.following_id));
+        return followingIds.reduce<Record<string, boolean>>((acc, id) => {
+            acc[id] = followedIds.has(id);
+            return acc;
+        }, {});
+    }
+
+    private isRedisReady(): boolean {
+        return this.redisService.getClient().status === 'ready';
+    }
+
+    private async ignoreRedisErrors<T>(factory: () => Promise<T>): Promise<T | undefined> {
+        if (!this.isRedisReady()) return undefined;
+
+        try {
+            return await factory();
+        } catch (error: any) {
+            this.logger.warn(`Redis cache operation skipped: ${error?.message || error}`);
+            return undefined;
         }
     }
 }

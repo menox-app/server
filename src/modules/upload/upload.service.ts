@@ -73,6 +73,12 @@ export class UploadService {
 
             // 3. Upload to cloud provider
             const result = await this.storageProvider.upload(multerFile, folder);
+            const metadata = {
+                width: result.width,
+                height: result.height,
+                durationMs: typeof result.duration === 'number' ? Math.round(result.duration * 1000) : undefined,
+                format: result.format,
+            };
 
             // 4. Save to database for lifecycle tracking
             const [media] = await this.knex(Collections.MEDIA).insert({
@@ -82,6 +88,7 @@ export class UploadService {
                 mime_type: data.mimetype,
                 size: buffer.length,
                 folder: folder,
+                metadata,
                 is_used: false,
                 user_id: userId || null
             }).returning('*');
@@ -94,12 +101,7 @@ export class UploadService {
                 mimeType: data.mimetype,
                 size: buffer.length,
                 folder,
-                metadata: {
-                    width: result.width,
-                    height: result.height,
-                    durationMs: typeof result.duration === 'number' ? Math.round(result.duration * 1000) : undefined,
-                    format: result.format,
-                },
+                metadata,
             };
         } catch (error) {
             this.logger.error(`Upload failed for file ${data.filename}: ${error.message}`, error.stack);
