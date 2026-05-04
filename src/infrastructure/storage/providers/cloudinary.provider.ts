@@ -18,7 +18,8 @@ export class CloudinaryProvider extends StorageProvider {
 
     async upload(file: Express.Multer.File, folder: string = 'menox'): Promise<StorageResult> {
         return new Promise((resolve, reject) => {
-            if (!file.mimetype.startsWith('image')) {
+            const isAllowed = file.mimetype.startsWith('image') || file.mimetype.startsWith('video');
+            if (!isAllowed) {
                 return reject(new BadRequestException('File type is not allowed'))
             }
 
@@ -31,7 +32,12 @@ export class CloudinaryProvider extends StorageProvider {
                 resolve({
                     url: result?.secure_url!,
                     remoteId: result?.public_id!,
-                    provider: 'cloudinary'
+                    provider: 'cloudinary',
+                    resourceType: result?.resource_type,
+                    width: result?.width,
+                    height: result?.height,
+                    duration: result?.duration,
+                    format: result?.format,
                 })
             });
 

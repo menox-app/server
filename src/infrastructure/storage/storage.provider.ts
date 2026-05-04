@@ -2,6 +2,11 @@ export interface StorageResult {
     url: string;
     remoteId: string;
     provider: string;
+    resourceType?: string;
+    width?: number;
+    height?: number;
+    duration?: number;
+    format?: string;
 }
 
 export abstract class StorageProvider {

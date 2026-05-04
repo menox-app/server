@@ -1,6 +1,6 @@
 import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
 import { BaseRepository } from '@/infrastructure/repositories/base.repository';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { Knex } from 'knex';
 import { CreatePostDto } from './dtos/create-post.dto';
 import { randomUUID } from 'crypto';
@@ -30,24 +30,55 @@ export class PostsService extends BaseRepository {
      * TẠO BÀI VIẾT MỚI
      */
     async createPost(userId: string, createPostDto: CreatePostDto) {
-        const { content, mediaUrls, visibility } = createPostDto;
-        return this.transaction(async (trx) => {
+        const { visibility } = createPostDto;
+        const content = createPostDto.content?.trim() || null;
+        const medias = createPostDto.medias || [];
+
+        if (!content && medias.length === 0) {
+            throw new BadRequestException('Post content or media is required');
+        }
+
+        const postId = await this.transaction(async (trx) => {
             const [post] = await trx(Collections.POSTS)
                 .insert({
                     id: randomUUID(),
                     author_id: userId,
-                    content: content,
+                    content,
                     visibility: visibility || 'public',
                 }).returning('*');
 
-            if (mediaUrls && mediaUrls.length > 0) {
-                const mediaData = mediaUrls.map((url) => ({
+            if (medias.length > 0) {
+                const mediaIds = [...new Set(medias
+                    .map((media) => media.mediaId)
+                    .filter((mediaId): mediaId is string => !!mediaId))];
+
+                if (mediaIds.length > 0) {
+                    const ownedMediaRows = await trx(Collections.MEDIA)
+                        .whereIn('id', mediaIds)
+                        .where({ user_id: userId })
+                        .select('id');
+
+                    if (ownedMediaRows.length !== mediaIds.length) {
+                        throw new BadRequestException('One or more media files are invalid');
+                    }
+                }
+
+                const mediaData = medias.map((media, index) => ({
                     id: randomUUID(),
                     post_id: post.id,
-                    url: url,
-                    type: 'image',
+                    url: media.url,
+                    public_id: media.publicId || null,
+                    type: media.type,
+                    mime_type: media.mimeType || null,
+                    thumbnail_url: media.thumbnailUrl || null,
+                    metadata: media.metadata || null,
+                    sort_order: media.order ?? index,
                 }));
                 await trx(Collections.POST_MEDIAS).insert(mediaData);
+
+                if (mediaIds.length > 0) {
+                    await trx(Collections.MEDIA).whereIn('id', mediaIds).update({ is_used: true });
+                }
             }
 
             // Xóa cache bài viết chung
@@ -61,8 +92,10 @@ export class PostsService extends BaseRepository {
                 // await this.fanOutPost(userId, post.id).catch(err => this.logger.error(`Fan-out failed: ${err.message}`));
             }
 
-            return post;
-        })
+            return post.id;
+        });
+
+        return (await this.fetchPostsDetails([postId], userId))[0];
     }
 
     /**
@@ -256,7 +289,7 @@ export class PostsService extends BaseRepository {
         const columns = [
             'posts.*',
             this.knex.raw(`jsonb_build_object('username', users.username, 'display_name', users.display_name, 'avatar_url', users.avatar_url) as author`),
-            this.knex.raw(`COALESCE((SELECT jsonb_agg(m.*) FROM post_medias m WHERE m.post_id = posts.id), '[]'::jsonb) as medias`),
+            this.knex.raw(`COALESCE((SELECT jsonb_agg(m.* ORDER BY m.sort_order ASC, m.created_at ASC) FROM post_medias m WHERE m.post_id = posts.id), '[]'::jsonb) as medias`),
             this.knex(Collections.POST_REACTIONS).count('*').where({ 'post_id': this.knex.ref('posts.id') }).as('like_count'),
             this.knex(Collections.POST_COMMENTS).count('*').where({ 'post_id': this.knex.ref('posts.id') }).as('comment_count'),
             this.knex.raw(`

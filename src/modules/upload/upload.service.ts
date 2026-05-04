@@ -75,7 +75,7 @@ export class UploadService {
             const result = await this.storageProvider.upload(multerFile, folder);
 
             // 4. Save to database for lifecycle tracking
-            await this.knex(Collections.MEDIA).insert({
+            const [media] = await this.knex(Collections.MEDIA).insert({
                 url: result.url,
                 remote_id: result.remoteId,
                 provider: result.provider,
@@ -84,9 +84,23 @@ export class UploadService {
                 folder: folder,
                 is_used: false,
                 user_id: userId || null
-            });
+            }).returning('*');
 
-            return result;
+            return {
+                ...result,
+                mediaId: media.id,
+                publicId: result.remoteId,
+                type: data.mimetype.startsWith('video') ? 'video' : 'image',
+                mimeType: data.mimetype,
+                size: buffer.length,
+                folder,
+                metadata: {
+                    width: result.width,
+                    height: result.height,
+                    durationMs: typeof result.duration === 'number' ? Math.round(result.duration * 1000) : undefined,
+                    format: result.format,
+                },
+            };
         } catch (error) {
             this.logger.error(`Upload failed for file ${data.filename}: ${error.message}`, error.stack);
             throw new BadRequestException(`Failed to upload file ${data.filename}`);

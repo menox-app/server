@@ -33,6 +33,10 @@ describe('PostsService', () => {
     expect(service).toBeDefined();
   });
 
+  it('rejects empty posts without content or media', async () => {
+    await expect(service.createPost('user-1', {} as any)).rejects.toThrow('Post content or media is required');
+  });
+
   it('normalizes anonymous post feed counts and empty highlight comments', async () => {
     const result = await (service as any).mapFollowStatus([
       {
