@@ -1,20 +1,31 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID } from "class-validator";
+import { Type } from "class-transformer";
+import { IsArray, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
 
+export class CreateCommentMediaDto {
+    @ApiProperty({
+        example: '3f4b887c-1b2d-4f1a-9dd0-fb0f9b8f84f1',
+        description: 'ID returned by /upload after the file is uploaded',
+    })
+    @IsUUID()
+    mediaId!: string;
 
-export enum CommentType {
-    TEXT = 'text',
-    IMAGE = 'image',
-    VIDEO = 'video',
-    GIF = 'gif',
-    STICKER = 'sticker'
+    @ApiProperty({
+        example: 0,
+        required: false,
+        description: 'Optional display order. Defaults to the array index.',
+    })
+    @IsInt()
+    @Min(0)
+    @IsOptional()
+    order?: number;
 }
 
 export class CreateCommentDto{
     @ApiProperty({ example: 'a1a4a759-31eb-417d-8c4d-66e6b4c3e8e1' })
     @IsUUID()
     @IsNotEmpty()
-    post_id: string
+    post_id!: string
 
     @ApiProperty({ example: 'This is a great post!' })
     @IsString()
@@ -26,18 +37,17 @@ export class CreateCommentDto{
     @IsOptional()
     parent_id?: string
 
-    @ApiProperty({ example: 'text' })
-    @IsEnum(CommentType)
+    @ApiProperty({
+        type: [CreateCommentMediaDto],
+        description: 'Uploaded media IDs to attach to the comment',
+        example: [
+            { mediaId: '3f4b887c-1b2d-4f1a-9dd0-fb0f9b8f84f1', order: 0 },
+        ],
+        required: false,
+    })
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => CreateCommentMediaDto)
     @IsOptional()
-    type?: CommentType = CommentType.TEXT
-
-    @ApiProperty({ example: 'https://picsum.photos/200/300', required: false })
-    @IsString()
-    @IsOptional()
-    media_url?: string
-
-    @ApiProperty({ example: { width: 800, height: 600 }, required: false })
-    @IsObject()
-    @IsOptional()
-    media_metadata?: Record<string, any>;
+    medias?: CreateCommentMediaDto[];
 }

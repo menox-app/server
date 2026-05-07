@@ -1,5 +1,6 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Knex } from 'knex';
+import { randomUUID } from 'crypto';
 import { KNEX_CONNECTION } from '@/infrastructure/knex/knex.module';
 import { CreateCommentDto } from './dtos/create-comment.dto';
 import { BaseRepository } from '@/infrastructure/repositories/base.repository';
@@ -18,8 +19,19 @@ export class CommentsService extends BaseRepository {
     }
 
     async createComment(userId: string, dto: CreateCommentDto) {
-        const { post_id, content, parent_id, type, media_url, media_metadata } = dto;
+        const { post_id, parent_id } = dto;
+        const content = dto.content?.trim() || '';
+        const medias = dto.medias || [];
         let depth = 0;
+
+        if (!content && medias.length === 0) {
+            throw new BadRequestException('Comment content or media is required');
+        }
+
+        const post = await this.knex(Collections.POSTS).where({ id: post_id }).first();
+        if (!post) {
+            throw new NotFoundException('Post not found');
+        }
 
         // Check parent comment
         if (parent_id) {
@@ -27,23 +39,79 @@ export class CommentsService extends BaseRepository {
             if (!parentComment) {
                 throw new NotFoundException('Parent comment not found');
             }
+            if (parentComment.post_id !== post_id) {
+                throw new BadRequestException('Parent comment does not belong to this post');
+            }
             depth = parentComment.depth + 1;
         }
 
-        // Create comment
-        const [comment] = await this.knex(Collections.POST_COMMENTS).insert({
-            user_id: userId,
-            post_id,
-            content,
-            parent_id,
-            type,
-            media_url,
-            media_metadata: media_metadata ? JSON.stringify(media_metadata) : null,
-            depth,
-        }).returning('*');
+        const comment = await this.transaction(async (trx) => {
+            const [createdComment] = await trx(Collections.POST_COMMENTS).insert({
+                user_id: userId,
+                post_id,
+                content,
+                parent_id,
+                depth,
+            }).returning('*');
 
-        // Find post
-        const post = await this.knex(Collections.POSTS).where({ id: post_id }).first();
+            if (medias.length > 0) {
+                const mediaIds = [...new Set(medias.map((media) => media.mediaId))];
+                const mediaRowsById = new Map<string, any>();
+
+                const ownedMediaRows = await trx(Collections.MEDIA)
+                    .whereIn('id', mediaIds)
+                    .where({ user_id: userId })
+                    .where({ status: 'ready' })
+                    .whereNull('deleted_at')
+                    .select('*');
+
+                if (ownedMediaRows.length !== mediaIds.length) {
+                    throw new BadRequestException('One or more media files are invalid');
+                }
+
+                ownedMediaRows.forEach((row) => mediaRowsById.set(row.id, row));
+
+                const mediaData = medias.map((media, index) => {
+                    const uploadedMedia = mediaRowsById.get(media.mediaId);
+                    const mimeType = uploadedMedia.mime_type || '';
+                    const mediaType = uploadedMedia.type || (mimeType.startsWith('video')
+                        ? 'video'
+                        : mimeType.startsWith('audio')
+                            ? 'audio'
+                            : mimeType === 'image/gif'
+                                ? 'gif'
+                                : mimeType.startsWith('image')
+                                    ? 'image'
+                                    : 'file');
+
+                    return {
+                        id: randomUUID(),
+                        comment_id: createdComment.id,
+                        media_id: uploadedMedia.id,
+                        url: uploadedMedia.url,
+                        public_id: uploadedMedia.remote_id || null,
+                        type: mediaType,
+                        mime_type: uploadedMedia.mime_type || null,
+                        thumbnail_url: null,
+                        metadata: uploadedMedia.metadata || null,
+                        sort_order: media.order ?? index,
+                    };
+                });
+
+                await trx(Collections.COMMENT_MEDIAS).insert(mediaData);
+            }
+
+            const commentMedias = medias.length > 0
+                ? await trx(Collections.COMMENT_MEDIAS)
+                    .where({ comment_id: createdComment.id })
+                    .orderBy('sort_order', 'asc')
+                : [];
+
+            return {
+                ...createdComment,
+                medias: commentMedias,
+            };
+        });
 
         if (post.author_id !== userId) {
             this.eventEmitter.emit(NOTIFICATION_EVENTS.POST_COMMENTED, {
@@ -101,10 +169,28 @@ export class CommentsService extends BaseRepository {
                 // ✨ THỰC THI ĐỀ XUẤT: Preview 2 phản hồi đầu tiên kèm Tác giả (dạng mảng JSON)
                 this.knex.raw(`
                 (
+                    SELECT COALESCE(json_agg(media ORDER BY media.sort_order ASC, media.created_at ASC), '[]'::json)
+                    FROM (
+                        SELECT cm.*
+                        FROM comment_medias cm
+                        WHERE cm.comment_id = post_comments.id
+                    ) media
+                ) as medias
+            `),
+                this.knex.raw(`
+                (
                     SELECT json_agg(preview)
                     FROM (
                         SELECT 
                             p.*,
+                            (
+                                SELECT COALESCE(json_agg(reply_media ORDER BY reply_media.sort_order ASC, reply_media.created_at ASC), '[]'::json)
+                                FROM (
+                                    SELECT cm_r.*
+                                    FROM comment_medias cm_r
+                                    WHERE cm_r.comment_id = p.id
+                                ) reply_media
+                            ) as medias,
                             json_build_object(
                                 'username', u_p.username,
                                 'display_name', u_p.display_name,

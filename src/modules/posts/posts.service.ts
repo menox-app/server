@@ -54,6 +54,8 @@ export class PostsService extends BaseRepository {
                 const ownedMediaRows = await trx(Collections.MEDIA)
                     .whereIn('id', mediaIds)
                     .where({ user_id: userId })
+                    .where({ status: 'ready' })
+                    .whereNull('deleted_at')
                     .select('*');
 
                 if (ownedMediaRows.length !== mediaIds.length) {
@@ -64,11 +66,15 @@ export class PostsService extends BaseRepository {
 
                 const mediaData = medias.map((media, index) => {
                     const uploadedMedia = mediaRowsById.get(media.mediaId);
-                    const type = uploadedMedia.mime_type?.startsWith('video') ? 'video' : 'image';
+                    const type = uploadedMedia.type || (uploadedMedia.mime_type?.startsWith('video') ? 'video' : 'image');
+                    if (!['image', 'video'].includes(type)) {
+                        throw new BadRequestException('Post media must be an image or video');
+                    }
 
                     return {
                         id: randomUUID(),
                         post_id: post.id,
+                        media_id: uploadedMedia.id,
                         url: uploadedMedia.url,
                         public_id: uploadedMedia.remote_id || null,
                         type,
@@ -79,10 +85,6 @@ export class PostsService extends BaseRepository {
                     };
                 });
                 await trx(Collections.POST_MEDIAS).insert(mediaData);
-
-                if (mediaIds.length > 0) {
-                    await trx(Collections.MEDIA).whereIn('id', mediaIds).update({ is_used: true });
-                }
             }
 
             // Xóa cache bài viết chung
@@ -307,11 +309,13 @@ export class PostsService extends BaseRepository {
                             pc.parent_id,
                             pc.content,
                             pc.depth,
-                            pc.type,
-                            pc.media_url,
-                            pc.media_metadata,
                             pc.created_at,
                             pc.updated_at,
+                            COALESCE((
+                                SELECT jsonb_agg(cm.* ORDER BY cm.sort_order ASC, cm.created_at ASC)
+                                FROM comment_medias cm
+                                WHERE cm.comment_id = pc.id
+                            ), '[]'::jsonb) as medias,
                             (
                                 SELECT count(*)::int
                                 FROM post_comments replies

@@ -85,19 +85,23 @@ export class UploadService {
                 url: result.url,
                 remote_id: result.remoteId,
                 provider: result.provider,
+                type: this.getMediaType(data.mimetype),
+                status: 'ready',
+                visibility: 'private',
                 mime_type: data.mimetype,
                 size: buffer.length,
                 folder: folder,
                 metadata,
-                is_used: false,
-                user_id: userId || null
+                checksum: null,
+                deleted_at: null,
+                user_id: userId || null,
             }).returning('*');
 
             return {
                 ...result,
                 mediaId: media.id,
                 publicId: result.remoteId,
-                type: data.mimetype.startsWith('video') ? 'video' : 'image',
+                type: media.type,
                 mimeType: data.mimetype,
                 size: buffer.length,
                 folder,
@@ -118,8 +122,19 @@ export class UploadService {
         const ONE_DAY_AGO = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
         const garbageFiles = await this.knex(Collections.MEDIA)
-            .where({ is_used: false })
-            .where('created_at', '<', ONE_DAY_AGO);
+            .where({ status: 'ready' })
+            .whereNull('deleted_at')
+            .where('created_at', '<', ONE_DAY_AGO)
+            .whereNotExists((qb) => {
+                qb.select(this.knex.raw('1'))
+                    .from(Collections.POST_MEDIAS)
+                    .whereRaw('post_medias.media_id = media.id');
+            })
+            .whereNotExists((qb) => {
+                qb.select(this.knex.raw('1'))
+                    .from(Collections.COMMENT_MEDIAS)
+                    .whereRaw('comment_medias.media_id = media.id');
+            });
 
         if (garbageFiles.length === 0) {
             this.logger.log('No garbage files found.');
@@ -130,7 +145,11 @@ export class UploadService {
         for (const file of garbageFiles) {
             try {
                 await this.storageProvider.delete(file.remote_id);
-                await this.knex(Collections.MEDIA).where({ id: file.id }).delete();
+                await this.knex(Collections.MEDIA).where({ id: file.id }).update({
+                    status: 'deleted',
+                    deleted_at: new Date(),
+                    updated_at: new Date(),
+                });
                 successCount++;
             } catch (error) {
                 this.logger.error(`Failed to delete garbage file ${file.remote_id}:`, error);
@@ -145,5 +164,14 @@ export class UploadService {
      */
     async uploadFile(file: any, folder?: string) {
         return this.storageProvider.upload(file, folder);
+    }
+
+    private getMediaType(mimeType?: string | null) {
+        if (!mimeType) return 'file';
+        if (mimeType === 'image/gif') return 'gif';
+        if (mimeType.startsWith('image/')) return 'image';
+        if (mimeType.startsWith('video/')) return 'video';
+        if (mimeType.startsWith('audio/')) return 'audio';
+        return 'file';
     }
 }
