@@ -99,10 +99,10 @@ export class UploadService {
 
             return {
                 ...result,
-                mediaId: media.id,
-                publicId: result.remoteId,
+                media_id: media.id,
+                public_id: result.remoteId,
                 type: media.type,
-                mimeType: data.mimetype,
+                mime_type: data.mimetype,
                 size: buffer.length,
                 folder,
                 metadata,

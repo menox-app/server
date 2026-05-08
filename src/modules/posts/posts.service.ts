@@ -48,7 +48,7 @@ export class PostsService extends BaseRepository {
                 }).returning('*');
 
             if (medias.length > 0) {
-                const mediaIds = [...new Set(medias.map((media) => media.mediaId))];
+                const mediaIds = [...new Set(medias.map((media) => media.media_id))];
                 const mediaRowsById = new Map<string, any>();
 
                 const ownedMediaRows = await trx(Collections.MEDIA)
@@ -65,7 +65,7 @@ export class PostsService extends BaseRepository {
                 ownedMediaRows.forEach((row) => mediaRowsById.set(row.id, row));
 
                 const mediaData = medias.map((media, index) => {
-                    const uploadedMedia = mediaRowsById.get(media.mediaId);
+                    const uploadedMedia = mediaRowsById.get(media.media_id);
                     const type = uploadedMedia.type || (uploadedMedia.mime_type?.startsWith('video') ? 'video' : 'image');
                     if (!['image', 'video'].includes(type)) {
                         throw new BadRequestException('Post media must be an image or video');

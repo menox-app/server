@@ -8,7 +8,7 @@ export class CreateCommentMediaDto {
         description: 'ID returned by /upload after the file is uploaded',
     })
     @IsUUID()
-    mediaId!: string;
+    media_id!: string;
 
     @ApiProperty({
         example: 0,
@@ -41,7 +41,7 @@ export class CreateCommentDto{
         type: [CreateCommentMediaDto],
         description: 'Uploaded media IDs to attach to the comment',
         example: [
-            { mediaId: '3f4b887c-1b2d-4f1a-9dd0-fb0f9b8f84f1', order: 0 },
+            { media_id: '3f4b887c-1b2d-4f1a-9dd0-fb0f9b8f84f1', order: 0 },
         ],
         required: false,
     })
