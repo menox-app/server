@@ -90,7 +90,7 @@ export class PostsService extends BaseRepository {
             // Xóa cache bài viết chung
             if (this.redisService.getClient().status === 'ready') {
                 this.redisService.removeKeysByPrefix('posts:all');
-                
+
                 /**
                  * ❄️ TẠM THỜI ĐÓNG BĂNG FAN-OUT ĐỂ TIẾT KIỆM REQUEST (Dùng Upstash Free)
                  * Khi nào có VPS riêng thì mở ra để đạt hiệu năng tối đa
@@ -153,13 +153,22 @@ export class PostsService extends BaseRepository {
     }
 
     /**
+     * LẤY CHI TIẾT BÀI VIẾT THEO ID
+     */
+    async findPostById(postId: string, currentUserId?: string) {
+        const posts = await this.fetchPostsDetails([postId], currentUserId);
+        return posts.length > 0 ? posts[0] : null;
+    }
+     
+
+    /**
      * PHÒNG TUYẾN DỰ PHÒNG: Lấy Feed trực tiếp từ DB (Pull Model)
      * Rất tiết kiệm Redis Request, chỉ gọi Redis 1 lần để lấy Following IDs
      */
     private async getFollowingFeedFallback(userId: string, limit: number, offset: number, page: number) {
         // Lấy danh sách người mình follow (Có cache Redis)
         const followingIds = await this.getFollowingIds(userId);
-        
+
         if (followingIds.length === 0) {
             return { data: [], meta: { total: 0, page, limit, has_more: false } };
         }
@@ -176,13 +185,13 @@ export class PostsService extends BaseRepository {
             .offset(offset);
 
         const mappedPosts = await this.mapFollowStatus(posts, userId);
-        return { 
-            data: mappedPosts, 
-            meta: { 
-                page, 
-                limit, 
-                has_more: posts.length === limit 
-            } 
+        return {
+            data: mappedPosts,
+            meta: {
+                page,
+                limit,
+                has_more: posts.length === limit
+            }
         };
     }
 
@@ -225,12 +234,12 @@ export class PostsService extends BaseRepository {
      */
     private async fanOutPost(authorId: string, postId: string) {
         if (this.redisService.getClient().status !== 'ready') return;
-        
-        await this.followService.getFollowStats(authorId); 
+
+        await this.followService.getFollowStats(authorId);
         const followersKey = `user:followers:${authorId}`;
         const followerIds = await this.redisService.smembers(followersKey);
 
-        if (followerIds.length <= 1) return; 
+        if (followerIds.length <= 1) return;
 
         const pipeline = this.redisService.getClient().pipeline();
         followerIds.forEach(fId => {
@@ -244,7 +253,7 @@ export class PostsService extends BaseRepository {
 
     private async warmUpFollowingFeed(userId: string): Promise<string[]> {
         if (this.redisService.getClient().status !== 'ready') return [];
-        
+
         const followingIds = await this.getFollowingIds(userId);
         if (followingIds.length === 0) return [];
 
@@ -252,7 +261,7 @@ export class PostsService extends BaseRepository {
             .whereIn('author_id', followingIds)
             .where({ visibility: 'public' })
             .orderBy('created_at', 'desc')
-            .limit(100) 
+            .limit(100)
             .select('id');
 
         const postIds = posts.map(p => p.id);
@@ -274,7 +283,7 @@ export class PostsService extends BaseRepository {
             return { is_liked: false };
         }
         await this.create(Collections.POST_REACTIONS, { id: randomUUID(), post_id: postId, user_id: userId, type: 'like' });
-        
+
         if (this.redisService.getClient().status === 'ready') {
             this.redisService.zincrby('posts:trending', 1, postId);
         }
@@ -394,7 +403,7 @@ export class PostsService extends BaseRepository {
 
     private async getFollowingIds(userId: string): Promise<string[]> {
         const redisKey = `user:following:${userId}`;
-        
+
         if (this.redisService.getClient().status === 'ready') {
             const ids = await this.redisService.smembers(redisKey);
             if (ids.length > 0) return ids.filter(id => id !== 'CACHE_WORMED');
@@ -402,11 +411,11 @@ export class PostsService extends BaseRepository {
 
         const follows = await this.knex(Collections.FOLLOWS).where({ follower_id: userId }).select('following_id');
         const ids = follows.map(f => f.following_id);
-        
+
         if (ids.length > 0 && this.redisService.getClient().status === 'ready') {
             await this.redisService.sadd(redisKey, ...ids, 'CACHE_WORMED');
         }
-        
+
         return ids;
     }
 }

@@ -34,6 +34,14 @@ export class PostsController {
         return this.postService.findAllPosts(query, userId);
     }
 
+    @Get(':id')
+    @PublicOptional()
+    @ApiOperation({ summary: 'Get post by ID' })
+    async findPostById(@Param('id', ParseUUIDPipe) postId: string, @Req() req) {
+        const userId = req.user?.id;
+        return this.postService.findPostById(postId, userId);
+    }
+
     @Post(':id/react')
     @ApiOperation({ summary: 'Reaction post' })
     async reactionPost(@Req() req, @Param('id', ParseUUIDPipe) postId: string) {
